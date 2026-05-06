@@ -5,6 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
 <title>BrainSpark Studio</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,400&display=swap" rel="stylesheet"/>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
@@ -507,7 +514,7 @@ canvas{max-width:100%;}
   <div class="chart-wrap">
     <div class="section-row" style="margin-bottom:.75rem">
       <div class="chart-title" style="margin:0">All Responses</div>
-      <button class="btn btn-d btn-sm" onclick="clearAnalytics()">Clear data</button>
+      <span id="analytics-sync-status" style="font-size:12px;color:var(--txt3);margin-right:8px"></span><button class="btn btn-d btn-sm" onclick="clearAnalytics()">Clear data</button>
     </div>
     <div class="resp-table-wrap"><table class="resp-table" id="resp-table"><thead><tr><th>Module</th><th>User</th><th>Student</th><th>Score</th><th>Finished</th><th>Time Taken</th><th>Date</th></tr></thead><tbody id="resp-tbody"></tbody></table></div>
   </div>
@@ -644,14 +651,7 @@ canvas{max-width:100%;}
 </div>
 
 <!-- ════ MODAL: STUDENT NAME ════ -->
-<div class="overlay" id="m-student-name">
-  <div class="modal" style="max-width:420px">
-    <div class="modal-head"><div class="modal-title">🎉 You finished!</div><button class="modal-x" onclick="skipStudentName()">×</button></div>
-    <p style="font-size:14px;color:var(--txt2);margin-bottom:1.25rem;line-height:1.6">Great job! Would you like to record your name with your score?</p>
-    <div class="field"><label class="lbl">Your name (optional)</label><input class="inp" id="student-name-inp" placeholder="e.g. Maria Santos" autocomplete="name"/></div>
-    <div class="brow right"><button class="btn btn-g" onclick="skipStudentName()">Skip</button><button class="btn btn-p" onclick="submitStudentName()">Submit</button></div>
-  </div>
-</div>
+
 
 <!-- ════ MODAL: ACCOUNT ════ -->
 <div class="overlay" id="m-account">
@@ -767,7 +767,6 @@ function seedDefaultData(){
 document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('li-pass').addEventListener('keydown',e=>{ if(e.key==='Enter') doLogin(); });
   document.getElementById('li-user').addEventListener('keydown',e=>{ if(e.key==='Enter') document.getElementById('li-pass').focus(); });
-  document.getElementById('student-name-inp').addEventListener('keydown',e=>{ if(e.key==='Enter') submitStudentName(); });
   document.querySelectorAll('.overlay').forEach(o=>{ o.addEventListener('click',e=>{ if(e.target===o) o.classList.remove('open'); }); });
 });
 
@@ -1325,7 +1324,7 @@ function finishModule(){
   const qTotal=mpQTotal;
   if(qTotal>0){
     recordResponse('unified',mpScore,qTotal,true);
-    promptStudentName(mpScore,qTotal);
+    showResult(mpScore,qTotal);
   } else {
     recordResponse('unified',null,null,true);
     toast('Module complete! ✓',2500);
@@ -1341,24 +1340,7 @@ function backFromModule(){
 /* ══════════════════════════════════════════════════════
    RESULT SCREEN
 ══════════════════════════════════════════════════════ */
-let _pendingScore=null;
-function promptStudentName(score,total){
-  _pendingScore={score,total};
-  document.getElementById('student-name-inp').value='';
-  openModal('m-student-name');
-}
-function skipStudentName(){
-  closeModal('m-student-name');
-  if(_pendingScore) showResult(_pendingScore.score,_pendingScore.total);
-  _pendingScore=null;
-}
-function submitStudentName(){
-  const name=document.getElementById('student-name-inp').value.trim();
-  closeModal('m-student-name');
-  if(name&&responses.length){responses[responses.length-1].studentName=name;saveResponses();}
-  if(_pendingScore) showResult(_pendingScore.score,_pendingScore.total);
-  _pendingScore=null;
-}
+
 function showResult(score,total){
   const pct=total?Math.round((score/total)*100):100;
   document.getElementById('r-pct').textContent=pct+'%';
@@ -1385,6 +1367,7 @@ function recordResponse(type,score,total,finished){
   const rec={id:uid(),moduleId:currentModuleId,moduleTitle:m.title,moduleType:type,role:currentRole,score,total,pct,Finished:finished,duration,studentName,timestamp:new Date().toISOString()};
   responses.push(rec); saveResponses();
   window._forcedStudentName=null;
+  _pushResponseToServer(rec);
 }
 function renderAnalytics(){
   const sum=document.getElementById('analytics-summary');
@@ -1874,12 +1857,7 @@ window.addEventListener('load', async () => {
 
   const launchId = sharedModule.id;
   toast('✅ Module loaded!', 1500);
-  setTimeout(() => {
-    if (typeof _baseStartModule === 'function') {
-      _baseStartModule(launchId);
-      if (typeof startStopwatch === 'function') startStopwatch();
-    }
-  }, 200);
+  setTimeout(() => startModule(launchId), 200);
 });
 
 // ── Dropdown answer toggle ──
@@ -2272,6 +2250,82 @@ drawTable = function() {
     tbody.appendChild(tr);
   });
 };
+
+// ══════════════════════════════════════════════════════════════
+//  SERVER SYNC + OFFLINE QUEUE
+// ══════════════════════════════════════════════════════════════
+const _OQ_KEY = 'bs_offline_response_queue';
+function _loadOQ()  { try { return JSON.parse(localStorage.getItem(_OQ_KEY)||'[]'); } catch { return []; } }
+function _saveOQ(q) { localStorage.setItem(_OQ_KEY, JSON.stringify(q)); }
+
+async function _pushResponseToServer(rec) {
+  try {
+    const res = await fetch('/api/responses', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(rec),
+    });
+    if (res.ok) return;
+    throw new Error('server error');
+  } catch {
+    // Offline or server down — queue for later
+    const q = _loadOQ();
+    if (!q.some(r => r.id === rec.id)) { q.push(rec); _saveOQ(q); }
+  }
+}
+
+async function _flushOfflineQueue() {
+  const q = _loadOQ();
+  if (!q.length) return;
+  const remaining = [];
+  for (const rec of q) {
+    try {
+      const res = await fetch('/api/responses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(rec),
+      });
+      if (!res.ok) remaining.push(rec);
+    } catch { remaining.push(rec); }
+  }
+  _saveOQ(remaining);
+  const sent = q.length - remaining.length;
+  if (sent > 0) toast('📡 Synced ' + sent + ' offline result' + (sent>1?'s':'') + ' to server', 3000);
+}
+
+window.addEventListener('online',  () => setTimeout(_flushOfflineQueue, 1000));
+window.addEventListener('load',    () => { if (navigator.onLine) setTimeout(_flushOfflineQueue, 3000); });
+
+// Pull server responses for author dashboard (cross-device)
+async function _pullServerResponses() {
+  if (!currentAuthorId) return;
+  try {
+    const res = await fetch('/api/responses/' + encodeURIComponent(currentAuthorId));
+    if (!res.ok) return;
+    const serverRecs = await res.json();
+    if (!Array.isArray(serverRecs) || !serverRecs.length) return;
+    const localIds = new Set(responses.map(r => r.id));
+    let changed = false;
+    for (const r of serverRecs) {
+      if (!localIds.has(r.id)) { responses.push(r); changed = true; }
+    }
+    if (changed) saveResponses();
+    return changed;
+  } catch { return false; }
+}
+
+// Wrap renderAnalytics to pull server data first (author only)
+const _baseRenderAnalyticsSync = renderAnalytics;
+renderAnalytics = async function() {
+  if (currentRole === 'author' && currentAuthorId) {
+    const el = document.getElementById('analytics-sync-status');
+    if (el) { el.textContent = '🔄 Syncing…'; el.style.color = 'var(--txt3)'; }
+    const got = await _pullServerResponses();
+    if (el) { el.textContent = got ? '✅ Synced' : ''; el.style.color = 'var(--green)'; }
+  }
+  _baseRenderAnalyticsSync();
+};
+
 </script>
 
 <!-- STUDENT NAME REQUIRED MODAL -->
