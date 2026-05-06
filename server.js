@@ -3,11 +3,14 @@
  * Pure Node.js, zero dependencies.
  *
  * Routes:
- *   GET  /                    → app
- *   POST /api/modules         → publish module → { slug, url }
- *   GET  /api/modules/:slug   → fetch module JSON
- *   GET  /m/:slug             → redirect to /#play=:slug
- *   GET  /health              → { ok: true }
+ *   GET  /                          → app
+ *   GET  /sw.js                     → service worker
+ *   POST /api/modules               → publish module → { slug, url }
+ *   GET  /api/modules/:slug         → fetch module JSON
+ *   GET  /m/:slug                   → redirect to /#play=:slug
+ *   POST /api/responses             → save student response (cross-device)
+ *   GET  /api/responses/:authorId   → fetch all responses for an author
+ *   GET  /health                    → { ok: true }
  */
 
 const http   = require('http');
@@ -18,6 +21,7 @@ const crypto = require('crypto');
 const PORT    = parseInt(process.env.PORT || '3000', 10);
 const DB_FILE = path.join(__dirname, 'db.json');
 const HTML    = path.join(__dirname, 'index.html');
+const SW_FILE = path.join(__dirname, 'sw.js');
 
 // ── DB (JSON file) ────────────────────────────────
 function loadDB() {
@@ -88,6 +92,17 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  // Serve service worker
+  if (method === 'GET' && p === '/sw.js') {
+    try {
+      const sw = fs.readFileSync(SW_FILE, 'utf8');
+      res.writeHead(200, { 'Content-Type': 'application/javascript; charset=utf-8', 'Service-Worker-Allowed': '/' });
+      return res.end(sw);
+    } catch {
+      return sendText(res, 404, 'sw.js not found');
+    }
+  }
+
   // POST /api/modules → publish
   if (method === 'POST' && p === '/api/modules') {
     let body;
@@ -129,6 +144,39 @@ const server = http.createServer(async (req, res) => {
     if (!db.modules[mMatch[1]]) return sendText(res, 404, 'Module not found');
     res.writeHead(302, { Location: `/#play=${mMatch[1]}` });
     return res.end();
+  }
+
+  // POST /api/responses → save student response
+  if (method === 'POST' && p === '/api/responses') {
+    let body;
+    try {
+      const raw = await readBody(req);
+      body = JSON.parse(raw);
+    } catch {
+      return sendJSON(res, 400, { error: 'Invalid JSON' });
+    }
+    if (!body || !body.id || !body.moduleId) {
+      return sendJSON(res, 400, { error: 'Missing required fields: id, moduleId' });
+    }
+    const db = loadDB();
+    if (!db.responses) db.responses = {};
+    // Store by authorId so authors can fetch their own
+    const authorId = body.authorId || body.moduleAuthorId || '_unknown';
+    if (!db.responses[authorId]) db.responses[authorId] = [];
+    // Deduplicate by response id
+    if (!db.responses[authorId].some(r => r.id === body.id)) {
+      db.responses[authorId].push(body);
+    }
+    saveDB(db);
+    return sendJSON(res, 200, { ok: true });
+  }
+
+  // GET /api/responses/:authorId → fetch responses for dashboard
+  const respMatch = p.match(/^\/api\/responses\/(.+)$/);
+  if (method === 'GET' && respMatch) {
+    const db  = loadDB();
+    const recs = (db.responses || {})[decodeURIComponent(respMatch[1])] || [];
+    return sendJSON(res, 200, recs);
   }
 
   sendText(res, 404, 'Not found');
