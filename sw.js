@@ -1,36 +1,25 @@
 /**
  * BrainSpark Studio — Service Worker
- * Strategy:
- *   App shell      → Cache-first (installed on SW activation)
- *   /api/modules/* → Cache-first with network fallback + cache update
- *   /api/responses → Network-only with offline queue (handled in app)
- *   CDN assets     → Cache-first, cached on first use
+ *
+ * Offline strategy:
+ *  /m/:slug          → serve cached index.html (app handles #play= in JS)
+ *  /                 → cache-first
+ *  /index.html       → cache-first
+ *  /api/modules/:slug → cache-first, update cache in background
+ *  /api/responses    → network-only (POST — SW never intercepts)
+ *  CDN assets        → cache on first use
  */
 
-const CACHE = 'brainspark-v1';
+const CACHE   = 'brainspark-v2';
+const SHELL   = ['/index.html', '/'];
 
-// Assets to pre-cache on install (app shell)
-const PRECACHE = [
-  '/',
-  '/index.html',
-];
-
-// CDN patterns to cache on first use
-const CDN_ORIGINS = [
-  'fonts.googleapis.com',
-  'fonts.gstatic.com',
-  'cdnjs.cloudflare.com',
-];
-
-// ── Install: pre-cache app shell ─────────────────
 self.addEventListener('install', e => {
   e.waitUntil(
-    caches.open(CACHE).then(cache => cache.addAll(PRECACHE))
+    caches.open(CACHE).then(c => c.addAll(SHELL))
   );
   self.skipWaiting();
 });
 
-// ── Activate: clean old caches ────────────────────
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys().then(keys =>
@@ -40,64 +29,76 @@ self.addEventListener('activate', e => {
   self.clients.claim();
 });
 
-// ── Fetch ─────────────────────────────────────────
 self.addEventListener('fetch', e => {
   const { request } = e;
   const url = new URL(request.url);
 
-  // Never intercept POST requests (responses, publish) — let them go to network
+  // Never intercept non-GET (POST responses, publish, etc.)
   if (request.method !== 'GET') return;
 
-  // /api/modules/:slug — cache-first, refresh in background
-  if (url.pathname.startsWith('/api/modules/')) {
-    e.respondWith(cacheFirstThenUpdate(request));
+  // /m/:slug  — offline-friendly: serve index.html, let app JS handle #play=
+  // The app already sets location.hash when online; offline we just need the shell.
+  if (/^\/m\/[a-f0-9]{6,16}$/.test(url.pathname)) {
+    e.respondWith(
+      caches.match('/index.html').then(cached => {
+        if (cached) return cached;
+        // Not cached yet — try network
+        return fetch(request).catch(() =>
+          new Response('<h2>No internet connection</h2><p>Please open this link once while online so BrainSpark can save it for offline use.</p>',
+            { status: 503, headers: { 'Content-Type': 'text/html' } })
+        );
+      })
+    );
     return;
   }
 
-  // Skip /api/responses (GET) — always network
+  // /api/modules/:slug — cache-first, refresh in background
+  if (/^\/api\/modules\/[a-f0-9]{6,16}$/.test(url.pathname)) {
+    e.respondWith(cacheFirstUpdate(request));
+    return;
+  }
+
+  // Skip /api/responses GET (always needs network for live data)
   if (url.pathname.startsWith('/api/responses')) return;
 
-  // CDN assets — cache-first
-  if (CDN_ORIGINS.some(o => url.hostname.includes(o))) {
+  // CDN assets (fonts, scripts) — cache on first use
+  const CDN = ['fonts.googleapis.com','fonts.gstatic.com','cdnjs.cloudflare.com'];
+  if (CDN.some(d => url.hostname.includes(d))) {
     e.respondWith(cacheFirst(request));
     return;
   }
 
-  // App shell (/, /index.html, /m/:slug redirect) — cache-first
+  // App shell
   if (url.origin === self.location.origin) {
     e.respondWith(cacheFirst(request));
-    return;
   }
 });
 
-// Cache-first: return cache if available, else network (and cache result)
-async function cacheFirst(request) {
-  const cached = await caches.match(request);
-  if (cached) return cached;
+async function cacheFirst(req) {
+  const hit = await caches.match(req);
+  if (hit) return hit;
   try {
-    const response = await fetch(request);
-    if (response.ok) {
-      const cache = await caches.open(CACHE);
-      cache.put(request, response.clone());
+    const res = await fetch(req);
+    if (res.ok) {
+      const c = await caches.open(CACHE);
+      c.put(req, res.clone());
     }
-    return response;
+    return res;
   } catch {
-    return new Response('Offline — resource not cached yet.', { status: 503 });
+    return new Response('Offline — not cached yet.', { status: 503 });
   }
 }
 
-// Cache-first but also update cache in background with latest from network
-async function cacheFirstThenUpdate(request) {
+async function cacheFirstUpdate(req) {
   const cache  = await caches.open(CACHE);
-  const cached = await cache.match(request);
-
-  const networkFetch = fetch(request).then(response => {
-    if (response.ok) cache.put(request, response.clone());
-    return response;
+  const cached = await cache.match(req);
+  // Always try to refresh in background
+  const fresh = fetch(req).then(res => {
+    if (res.ok) cache.put(req, res.clone());
+    return res;
   }).catch(() => null);
-
-  return cached || networkFetch || new Response(
-    JSON.stringify({ error: 'Offline and module not cached' }),
+  return cached || fresh || new Response(
+    JSON.stringify({ error: 'Module not available offline' }),
     { status: 503, headers: { 'Content-Type': 'application/json' } }
   );
 }

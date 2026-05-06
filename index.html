@@ -1809,33 +1809,36 @@ function _copyShareUrl() {
 //  imports it, and launches the player.
 // ══════════════════════════════════════════════════
 window.addEventListener('load', async () => {
-  const hash = location.hash; // e.g. #play=a3f9c2b1
-  if (!hash.startsWith('#play=')) return;
-
-  const slug = hash.slice('#play='.length);
+  // Online: server redirects /m/:slug → /#play=slug (read from hash)
+  // Offline: SW serves index.html for /m/:slug (read slug from pathname)
+  let slug = null;
+  const hash = location.hash;
+  if (hash.startsWith('#play=')) slug = hash.slice('#play='.length) || null;
+  const pathMatch = location.pathname.match(/^\/m\/([a-f0-9]{6,16})$/);
+  if (!slug && pathMatch) slug = pathMatch[1];
   if (!slug) return;
 
-  // Clear hash immediately
-  history.replaceState(null, '', location.pathname);
+  history.replaceState(null, '', '/');
 
-  // Show loading state
   toast('⏳ Loading shared module…', 3000);
 
   let sharedModule;
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000); // 8s timeout
+    const timeout = setTimeout(() => controller.abort(), 8000);
     const res = await fetch('/api/modules/' + slug, { signal: controller.signal });
     clearTimeout(timeout);
     if (!res.ok) throw new Error('not found');
     sharedModule = await res.json();
   } catch(e) {
-    if (e.name === 'AbortError') {
-      toast('⚠️ Server took too long to respond. Is it running?', 5000);
-    } else {
-      toast('⚠️ Module not found or server is unreachable.', 5000);
+    // Offline fallback: module may already be in localStorage
+    const local = (typeof modules !== 'undefined' ? modules : [])
+      .find(m => m.id === slug || m._slug === slug);
+    if (local) { sharedModule = local; }
+    else {
+      toast('⚠️ No internet and module not cached. Open this link once while online first.', 6000);
+      return;
     }
-    return;
   }
 
   if (!sharedModule || !sharedModule.id) {
@@ -1843,7 +1846,8 @@ window.addEventListener('load', async () => {
     return;
   }
 
-  // Import into local storage
+  // Import into local storage (tag with slug for offline lookup)
+  sharedModule._slug = slug;
   const existing = modules.findIndex(x => x.id === sharedModule.id);
   if (existing >= 0) { modules[existing] = sharedModule; }
   else { modules.push(sharedModule); }
@@ -2251,29 +2255,34 @@ drawTable = function() {
   });
 };
 
-// ══════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════
 //  SERVER SYNC + OFFLINE QUEUE
-// ══════════════════════════════════════════════════════════════
+//  Runs in every script context after init.
+// ══════════════════════════════════════════════════════════════════
+
+// ── Offline queue ────────────────────────────────────────────────
 const _OQ_KEY = 'bs_offline_response_queue';
 function _loadOQ()  { try { return JSON.parse(localStorage.getItem(_OQ_KEY)||'[]'); } catch { return []; } }
 function _saveOQ(q) { localStorage.setItem(_OQ_KEY, JSON.stringify(q)); }
 
+// POST one result to the server; queue it if offline
 async function _pushResponseToServer(rec) {
   try {
     const res = await fetch('/api/responses', {
-      method: 'POST',
+      method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(rec),
+      body:    JSON.stringify(rec),
     });
     if (res.ok) return;
-    throw new Error('server error');
+    throw new Error('server ' + res.status);
   } catch {
-    // Offline or server down — queue for later
+    // Store for later
     const q = _loadOQ();
     if (!q.some(r => r.id === rec.id)) { q.push(rec); _saveOQ(q); }
   }
 }
 
+// Flush offline queue when internet returns
 async function _flushOfflineQueue() {
   const q = _loadOQ();
   if (!q.length) return;
@@ -2281,29 +2290,29 @@ async function _flushOfflineQueue() {
   for (const rec of q) {
     try {
       const res = await fetch('/api/responses', {
-        method: 'POST',
+        method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(rec),
+        body:    JSON.stringify(rec),
       });
       if (!res.ok) remaining.push(rec);
     } catch { remaining.push(rec); }
   }
   _saveOQ(remaining);
   const sent = q.length - remaining.length;
-  if (sent > 0) toast('📡 Synced ' + sent + ' offline result' + (sent>1?'s':'') + ' to server', 3000);
+  if (sent > 0) toast('📡 Synced ' + sent + ' offline result' + (sent > 1 ? 's' : '') + ' to server', 3000);
 }
 
-window.addEventListener('online',  () => setTimeout(_flushOfflineQueue, 1000));
-window.addEventListener('load',    () => { if (navigator.onLine) setTimeout(_flushOfflineQueue, 3000); });
+window.addEventListener('online', () => setTimeout(_flushOfflineQueue, 1000));
+window.addEventListener('load',   () => { if (navigator.onLine) setTimeout(_flushOfflineQueue, 3000); });
 
-// Pull server responses for author dashboard (cross-device)
+// ── Pull server responses for author dashboard (cross-device) ────
 async function _pullServerResponses() {
-  if (!currentAuthorId) return;
+  if (!currentAuthorId) return false;
   try {
     const res = await fetch('/api/responses/' + encodeURIComponent(currentAuthorId));
-    if (!res.ok) return;
+    if (!res.ok) return false;
     const serverRecs = await res.json();
-    if (!Array.isArray(serverRecs) || !serverRecs.length) return;
+    if (!Array.isArray(serverRecs) || !serverRecs.length) return false;
     const localIds = new Set(responses.map(r => r.id));
     let changed = false;
     for (const r of serverRecs) {
@@ -2314,16 +2323,34 @@ async function _pullServerResponses() {
   } catch { return false; }
 }
 
-// Wrap renderAnalytics to pull server data first (author only)
-const _baseRenderAnalyticsSync = renderAnalytics;
+// ── Wrap renderAnalytics: pull from server first ─────────────────
+const _baseRenderAnalyticsServer = renderAnalytics;
 renderAnalytics = async function() {
   if (currentRole === 'author' && currentAuthorId) {
     const el = document.getElementById('analytics-sync-status');
     if (el) { el.textContent = '🔄 Syncing…'; el.style.color = 'var(--txt3)'; }
     const got = await _pullServerResponses();
-    if (el) { el.textContent = got ? '✅ Synced' : ''; el.style.color = 'var(--green)'; }
+    if (el) { el.textContent = got ? '✅ New results loaded' : ''; el.style.color = 'var(--green)'; }
   }
-  _baseRenderAnalyticsSync();
+  _baseRenderAnalyticsServer();
+};
+
+// ── Auto-refresh dashboard every 30 s while author is on it ──────
+const _origGoScreenSync = goScreen;
+let   _syncPollInterval = null;
+goScreen = function(id) {
+  _origGoScreenSync(id);
+  clearInterval(_syncPollInterval); _syncPollInterval = null;
+  if (id === 's-analytics' && currentRole === 'author') {
+    _syncPollInterval = setInterval(async () => {
+      const got = await _pullServerResponses();
+      if (got) {
+        renderAnalytics();
+        const el = document.getElementById('analytics-sync-status');
+        if (el) { el.textContent = '✅ New results received!'; el.style.color = 'var(--green)'; }
+      }
+    }, 30000);
+  }
 };
 
 </script>
