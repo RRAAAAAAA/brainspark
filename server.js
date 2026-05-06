@@ -3,13 +3,11 @@
  * Pure Node.js, zero dependencies.
  *
  * Routes:
- *   GET  /                        → app
- *   POST /api/modules             → publish module → { slug, url }
- *   GET  /api/modules/:slug       → fetch module JSON
- *   GET  /m/:slug                 → redirect to /#play=:slug
- *   POST /api/responses           → student submits result
- *   GET  /api/responses/:authorId → author fetches all results for their modules
- *   GET  /health                  → { ok: true }
+ *   GET  /                    → app
+ *   POST /api/modules         → publish module → { slug, url }
+ *   GET  /api/modules/:slug   → fetch module JSON
+ *   GET  /m/:slug             → redirect to /#play=:slug
+ *   GET  /health              → { ok: true }
  */
 
 const http   = require('http');
@@ -24,10 +22,10 @@ const HTML    = path.join(__dirname, 'index.html');
 // ── DB (JSON file) ────────────────────────────────
 function loadDB() {
   try { return JSON.parse(fs.readFileSync(DB_FILE, 'utf8')); }
-  catch { return { modules: {}, responses: [] }; }
+  catch { return { modules: {} }; }
 }
 function saveDB(db) {
-  try { fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2)); }
+  try { fs.writeFileSync(DB_FILE, JSON.stringify(db)); }
   catch (e) { console.error('DB write failed:', e.message); }
 }
 
@@ -35,6 +33,7 @@ function saveDB(db) {
 function makeSlug() {
   return crypto.randomBytes(4).toString('hex'); // 8 hex chars
 }
+
 function readBody(req) {
   return new Promise((res, rej) => {
     let buf = '';
@@ -43,17 +42,21 @@ function readBody(req) {
     req.on('error', rej);
   });
 }
+
 const CORS = {
   'Access-Control-Allow-Origin':  '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
 };
+
 function sendJSON(res, status, data) {
+  const body = JSON.stringify(data);
   res.writeHead(status, { 'Content-Type': 'application/json', ...CORS });
-  res.end(JSON.stringify(data));
+  res.end(body);
 }
+
 function sendText(res, status, text) {
-  res.writeHead(status, { 'Content-Type': 'text/plain', ...CORS });
+  res.writeHead(status, { 'Content-Type': 'text/plain' });
   res.end(text);
 }
 
@@ -85,7 +88,7 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  // ── POST /api/modules → publish ──────────────────
+  // POST /api/modules → publish
   if (method === 'POST' && p === '/api/modules') {
     let body;
     try {
@@ -98,7 +101,6 @@ const server = http.createServer(async (req, res) => {
       return sendJSON(res, 400, { error: 'Missing required fields: id, title' });
     }
     const db   = loadDB();
-    if (!db.responses) db.responses = [];
     const slug = makeSlug();
     db.modules[slug] = { ...body, publishedAt: new Date().toISOString() };
     saveDB(db);
@@ -111,7 +113,7 @@ const server = http.createServer(async (req, res) => {
     return sendJSON(res, 200, { slug, url: shareUrl });
   }
 
-  // ── GET /api/modules/:slug → fetch ───────────────
+  // GET /api/modules/:slug → fetch
   const apiMatch = p.match(/^\/api\/modules\/([a-f0-9]{6,16})$/);
   if (method === 'GET' && apiMatch) {
     const db = loadDB();
@@ -120,57 +122,13 @@ const server = http.createServer(async (req, res) => {
     return sendJSON(res, 200, m);
   }
 
-  // ── GET /m/:slug → redirect to player ────────────
+  // GET /m/:slug → redirect to player
   const mMatch = p.match(/^\/m\/([a-f0-9]{6,16})$/);
   if (method === 'GET' && mMatch) {
     const db = loadDB();
     if (!db.modules[mMatch[1]]) return sendText(res, 404, 'Module not found');
     res.writeHead(302, { Location: `/#play=${mMatch[1]}` });
     return res.end();
-  }
-
-  // ── POST /api/responses → student submits result ─
-  if (method === 'POST' && p === '/api/responses') {
-    let body;
-    try {
-      const raw = await readBody(req);
-      body = JSON.parse(raw);
-    } catch {
-      return sendJSON(res, 400, { error: 'Invalid JSON' });
-    }
-    if (!body || !body.moduleId) {
-      return sendJSON(res, 400, { error: 'Missing moduleId' });
-    }
-    const db = loadDB();
-    if (!db.responses) db.responses = [];
-
-    // Deduplicate by response id so retries don't double-save
-    const alreadyExists = db.responses.some(r => r.id === body.id);
-    if (!alreadyExists) {
-      db.responses.push({ ...body, receivedAt: new Date().toISOString() });
-      saveDB(db);
-      console.log(`📊 Response saved: "${body.moduleTitle}" — ${body.studentName || 'anonymous'} — ${body.pct != null ? body.pct + '%' : 'no score'}`);
-    }
-    return sendJSON(res, 200, { ok: true });
-  }
-
-  // ── GET /api/responses/:authorId → all results for author ─
-  const respMatch = p.match(/^\/api\/responses\/(.+)$/);
-  if (method === 'GET' && respMatch) {
-    const authorId = decodeURIComponent(respMatch[1]);
-    const db = loadDB();
-    if (!db.responses) return sendJSON(res, 200, []);
-
-    // Find all module IDs belonging to this author
-    const authorModuleIds = new Set(
-      Object.values(db.modules)
-        .filter(m => m.authorId === authorId)
-        .map(m => m.id)
-    );
-
-    // Return responses whose moduleId belongs to author's modules
-    const filtered = db.responses.filter(r => authorModuleIds.has(r.moduleId));
-    return sendJSON(res, 200, filtered);
   }
 
   sendText(res, 404, 'Not found');

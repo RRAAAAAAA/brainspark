@@ -507,7 +507,7 @@ canvas{max-width:100%;}
   <div class="chart-wrap">
     <div class="section-row" style="margin-bottom:.75rem">
       <div class="chart-title" style="margin:0">All Responses</div>
-      <span id="analytics-sync-status" style="font-size:12px;color:var(--txt3);margin-right:8px"></span><button class="btn btn-d btn-sm" onclick="clearAnalytics()">Clear data</button>
+      <button class="btn btn-d btn-sm" onclick="clearAnalytics()">Clear data</button>
     </div>
     <div class="resp-table-wrap"><table class="resp-table" id="resp-table"><thead><tr><th>Module</th><th>User</th><th>Student</th><th>Score</th><th>Finished</th><th>Time Taken</th><th>Date</th></tr></thead><tbody id="resp-tbody"></tbody></table></div>
   </div>
@@ -1355,12 +1355,7 @@ function skipStudentName(){
 function submitStudentName(){
   const name=document.getElementById('student-name-inp').value.trim();
   closeModal('m-student-name');
-  if(name&&responses.length){
-    responses[responses.length-1].studentName=name;
-    saveResponses();
-    // Re-push with name attached
-    _pushResponseToServer(responses[responses.length-1]);
-  }
+  if(name&&responses.length){responses[responses.length-1].studentName=name;saveResponses();}
   if(_pendingScore) showResult(_pendingScore.score,_pendingScore.total);
   _pendingScore=null;
 }
@@ -1390,8 +1385,6 @@ function recordResponse(type,score,total,finished){
   const rec={id:uid(),moduleId:currentModuleId,moduleTitle:m.title,moduleType:type,role:currentRole,score,total,pct,Finished:finished,duration,studentName,timestamp:new Date().toISOString()};
   responses.push(rec); saveResponses();
   window._forcedStudentName=null;
-  // Fire-and-forget: push to server so author sees it cross-device
-  _pushResponseToServer(rec);
 }
 function renderAnalytics(){
   const sum=document.getElementById('analytics-summary');
@@ -2278,93 +2271,6 @@ drawTable = function() {
     tr.innerHTML = `<td><strong>${esc(r.moduleTitle)}</strong></td><td>${r.role||'—'}</td><td>${sname}</td><td>${score}</td><td>${fin}</td><td style="color:var(--gold);font-weight:500">${timeTaken}</td><td style="color:var(--txt2);font-size:12px">${time}</td>`;
     tbody.appendChild(tr);
   });
-};
-
-// ══════════════════════════════════════════════════════════════
-//  SERVER SYNC — cross-device score reporting
-// ══════════════════════════════════════════════════════════════
-
-// POST one response record to the server (silent, non-blocking)
-async function _pushResponseToServer(rec) {
-  try {
-    await fetch('/api/responses', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(rec),
-    });
-  } catch (_) {
-    // Offline / server not running — silently ignore.
-    // Response is already in localStorage so it's safe.
-  }
-}
-
-// Pull server responses for the current author and merge into local array.
-// Deduplicates by record id so double-entries never appear.
-async function _pullServerResponses() {
-  if (!currentAuthorId) return;
-  try {
-    const res = await fetch('/api/responses/' + encodeURIComponent(currentAuthorId));
-    if (!res.ok) return;
-    const serverRecs = await res.json();
-    if (!Array.isArray(serverRecs) || !serverRecs.length) return;
-
-    let changed = false;
-    const localIds = new Set(responses.map(r => r.id));
-    for (const r of serverRecs) {
-      if (!localIds.has(r.id)) {
-        responses.push(r);
-        changed = true;
-      }
-    }
-    if (changed) {
-      saveResponses();
-    }
-    return changed;
-  } catch (_) {
-    // Server unreachable — continue with local data
-  }
-}
-
-// Wrap renderAnalytics: if author, fetch server data first then render
-const _baseRenderAnalyticsSync = renderAnalytics;
-renderAnalytics = async function() {
-  if (currentRole === 'author' && currentAuthorId) {
-    const syncIndicator = document.getElementById('analytics-sync-status');
-    if (syncIndicator) {
-      syncIndicator.textContent = '🔄 Syncing…';
-      syncIndicator.style.color = 'var(--txt3)';
-    }
-    const got = await _pullServerResponses();
-    if (syncIndicator) {
-      syncIndicator.textContent = got ? '✅ Synced from server' : '📡 Up to date';
-      syncIndicator.style.color = got ? 'var(--green)' : 'var(--txt3)';
-    }
-  }
-  _baseRenderAnalyticsSync();
-};
-
-// Auto-refresh dashboard every 30 s while the author is on the analytics screen
-let _syncInterval = null;
-const _origGoScreen = goScreen;
-goScreen = function(id) {
-  _origGoScreen(id);
-  if (id === 's-analytics') {
-    clearInterval(_syncInterval);
-    if (currentRole === 'author') {
-      _syncInterval = setInterval(async () => {
-        const changed = await _pullServerResponses();
-        if (changed) {
-          // Silent re-render if new data arrived
-          _baseRenderAnalyticsSync();
-          const el = document.getElementById('analytics-sync-status');
-          if (el) { el.textContent = '✅ New results received!'; el.style.color = 'var(--green)'; }
-        }
-      }, 30000);
-    }
-  } else {
-    clearInterval(_syncInterval);
-    _syncInterval = null;
-  }
 };
 </script>
 
