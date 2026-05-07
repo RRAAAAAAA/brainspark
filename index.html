@@ -535,6 +535,23 @@ canvas{max-width:100%;}
     </div>
   </div>
 
+  <div class="sync-box" style="border-color:rgba(123,110,246,.3)">
+    <h4>🎓 Export for Students (Field Mode)</h4>
+    <p>Generate a <strong>brainspark-modules.json</strong> for students to import into <strong>student.html</strong>. No internet or server needed — works fully offline.</p>
+    <div class="sync-methods">
+      <button class="btn btn-p btn-sm" onclick="exportForStudents()">📦 Export Modules for Students</button>
+    </div>
+  </div>
+
+  <div class="sync-box" style="border-color:rgba(62,207,142,.25)">
+    <h4>📥 Import Student Results</h4>
+    <p>Students export a results file from <strong>student.html</strong> and send it back to you. Import it here to see their scores on your dashboard.</p>
+    <div class="sync-methods">
+      <input type="file" id="student-results-file" accept=".json" style="display:none" onchange="importStudentResults(this)"/>
+      <button class="btn btn-green btn-sm" onclick="document.getElementById('student-results-file').click()">📂 Import Student Results</button>
+    </div>
+  </div>
+
   <div class="sync-box">
     <h4>📥 Import Modules</h4>
     <p>Import a .json file from another device to receive their updated modules. You choose what gets added.</p>
@@ -727,58 +744,6 @@ function getAuthorByUsername(u){ return authors.find(a=>a.username.toLowerCase()
 function getAuthorById(id){ return authors.find(a=>a.id===id); }
 
 /* ══════════════════════════════════════════════════════
-   SERVER MODULE PERSISTENCE
-   Push every module save/import/delete to the server so
-   modules survive browser clears and work across devices.
-══════════════════════════════════════════════════════ */
-async function _pushModuleToServer(mod){
-  if(!mod||!mod.id||!mod.authorId) return;
-  try{
-    await fetch('/api/modules/'+encodeURIComponent(mod.id),{
-      method:'PUT',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify(mod)
-    });
-  }catch(e){ console.warn('Module push failed (offline?):', e.message); }
-}
-
-async function _deleteModuleFromServer(moduleId, authorId){
-  if(!moduleId||!authorId) return;
-  try{
-    await fetch('/api/modules/'+encodeURIComponent(moduleId)+'?authorId='+encodeURIComponent(authorId),{
-      method:'DELETE'
-    });
-  }catch(e){ console.warn('Module delete failed (offline?):', e.message); }
-}
-
-async function _pullModulesFromServer(authorId){
-  // If authorId provided, pull author-specific modules; otherwise pull ALL public modules
-  const url = authorId
-    ? '/api/modules?authorId='+encodeURIComponent(authorId)
-    : '/api/modules';
-  try{
-    const res=await fetch(url);
-    if(!res.ok) return false;
-    const serverMods=await res.json();
-    if(!Array.isArray(serverMods)||!serverMods.length) return false;
-    let changed=false;
-    for(const sm of serverMods){
-      const idx=modules.findIndex(m=>m.id===sm.id);
-      // Use whichever version is newer (server wins if same age or no local copy)
-      if(idx<0){
-        modules.push(sm); changed=true;
-      } else {
-        const localTs=modules[idx].updatedAt||modules[idx].publishedAt||'';
-        const serverTs=sm.updatedAt||sm.publishedAt||'';
-        if(serverTs>=localTs){ modules[idx]=sm; changed=true; }
-      }
-    }
-    if(changed) saveModules();
-    return changed;
-  }catch(e){ console.warn('Module pull failed (offline?):', e.message); return false; }
-}
-
-/* ══════════════════════════════════════════════════════
    SEED
 ══════════════════════════════════════════════════════ */
 function seedDefaultData(){
@@ -810,9 +775,8 @@ function seedDefaultData(){
       ]
     }];
     saveModules();
-    // Push the default module to the server so it's visible to all users across devices
-    setTimeout(()=>_pushModuleToServer(modules[0]),500);
-  }}
+  }
+}
 
 /* ══════════════════════════════════════════════════════
    AUTH
@@ -851,26 +815,13 @@ function doLogin(){
     currentRole='author'; currentAuthorId=author.id;
     document.getElementById('li-err').style.display='none';
     setupNav(); goScreen('s-home');
-    // Pull ALL public modules + this author's specific modules from server
-    Promise.all([
-      _pullModulesFromServer(null),
-      _pullModulesFromServer(author.id)
-    ]).then(([allChanged, authorChanged])=>{
-      if(allChanged||authorChanged){ renderAuthorList(); toast('☁️ Modules synced from server',2200); }
-    });
   } else {
     document.getElementById('li-err').style.display='block';
   }
 }
 function loginUser(){
   currentRole='user'; currentAuthorId=null;
-  setupNav();
-  // Pull all modules from server so student sees everything
-  _pullModulesFromServer(null).then(changed=>{
-    renderUserPlayList();
-    if(changed) toast('☁️ Modules loaded from server',2000);
-  }).catch(()=>renderUserPlayList());
-  goScreen('s-home-user');
+  setupNav(); renderUserPlayList(); goScreen('s-home-user');
 }
 function logout(){
   currentRole=null; currentAuthorId=null;
@@ -992,7 +943,6 @@ function deleteModule(id){
   const m=getMod(id);
   if(m&&m.authorId&&m.authorId!==currentAuthorId){toast('You can only delete your own modules');return;}
   if(!confirm('Delete this module?')) return;
-  if(m&&m.authorId) _deleteModuleFromServer(id, m.authorId);
   modules=modules.filter(x=>x.id!==id); saveModules(); renderAuthorList(); toast('Deleted');
 }
 
@@ -1177,11 +1127,10 @@ function saveModule(){
     const m=getMod(editingModuleId);
     if(m.authorId&&m.authorId!==currentAuthorId){toast('You can only edit your own modules');return;}
     m.title=title; m.desc=desc; m.pages=JSON.parse(JSON.stringify(edPages));
-    m.updatedAt=new Date().toISOString();
-    saveModules(); _pushModuleToServer(m); toast('Module updated!');
+    saveModules(); toast('Module updated!');
   } else {
-    const mod={id:uid(),type:'unified',title,desc,authorId:currentAuthorId,pages:JSON.parse(JSON.stringify(edPages)),updatedAt:new Date().toISOString()};
-    modules.push(mod); saveModules(); editingModuleId=mod.id; _pushModuleToServer(mod); toast('Module saved!');
+    const mod={id:uid(),type:'unified',title,desc,authorId:currentAuthorId,pages:JSON.parse(JSON.stringify(edPages))};
+    modules.push(mod); saveModules(); editingModuleId=mod.id; toast('Module saved!');
   }
   renderAuthorList(); goScreen('s-author');
 }
@@ -1432,7 +1381,9 @@ function recordResponse(type,score,total,finished){
   // Use stopwatch elapsed if available, else fall back to sessionStart
   const duration=window._lastQuizDuration!=null?window._lastQuizDuration:(sessionStart?Math.round((Date.now()-sessionStart)/1000):null);
   const studentName=window._forcedStudentName||null;
-  const rec={id:uid(),moduleId:currentModuleId,moduleTitle:m.title,moduleType:type,role:currentRole,score,total,pct,Finished:finished,duration,studentName,timestamp:new Date().toISOString()};
+  // Include authorId so server can filter by author without a join
+  const authorId=m.authorId||null;
+  const rec={id:uid(),moduleId:currentModuleId,moduleTitle:m.title,moduleType:type,role:currentRole,score,total,pct,Finished:finished,duration,studentName,authorId,timestamp:new Date().toISOString()};
   responses.push(rec); saveResponses();
   window._forcedStudentName=null;
   _pushResponseToServer(rec);
@@ -1586,18 +1537,14 @@ function doImportModules(){
   let count=0;
   _importPending.forEach((m,i)=>{
     if(!checkboxes[i]||!checkboxes[i].checked) return;
-    // Stamp the current author as owner if not already set
-    if(!m.authorId) m.authorId=currentAuthorId;
-    m.updatedAt=new Date().toISOString();
     // Check if module with same id already exists — update or add
     const existing=modules.findIndex(x=>x.id===m.id);
     if(existing>=0){ modules[existing]=m; }
     else { modules.push({...m}); }
-    _pushModuleToServer(m);
     count++;
   });
   saveModules(); closeModal('m-import-confirm');
-  toast(`Imported ${count} module(s)! Saving to server…`);
+  toast(`Imported ${count} module(s)!`);
   renderAuthorList();
 }
 
@@ -1690,15 +1637,6 @@ async function exportModulePDF(id){
   loadAll();
   seedDefaultData();
   document.getElementById('loading-overlay').style.display='none';
-  // Pull all publicly published modules from the server on startup.
-  // This ensures any device — including first-time visitors — always
-  // sees modules created or imported from any other device.
-  _pullModulesFromServer(null).then(changed=>{
-    if(changed){
-      renderAuthorList && renderAuthorList();
-      renderUserPlayList && renderUserPlayList();
-    }
-  }).catch(()=>{});
 })();
 </script>
 
@@ -1890,8 +1828,6 @@ function _copyShareUrl() {
 //  imports it, and launches the player.
 // ══════════════════════════════════════════════════
 window.addEventListener('load', async () => {
-  // Online: server redirects /m/:slug → /#play=slug (read from hash)
-  // Offline: SW serves index.html for /m/:slug (read slug from pathname)
   let slug = null;
   const hash = location.hash;
   if (hash.startsWith('#play=')) slug = hash.slice('#play='.length) || null;
@@ -1912,7 +1848,6 @@ window.addEventListener('load', async () => {
     if (!res.ok) throw new Error('not found');
     sharedModule = await res.json();
   } catch(e) {
-    // Offline fallback: module may already be in localStorage
     const local = (typeof modules !== 'undefined' ? modules : [])
       .find(m => m.id === slug || m._slug === slug);
     if (local) { sharedModule = local; }
@@ -1927,7 +1862,6 @@ window.addEventListener('load', async () => {
     return;
   }
 
-  // Import into local storage (tag with slug for offline lookup)
   sharedModule._slug = slug;
   const existing = modules.findIndex(x => x.id === sharedModule.id);
   if (existing >= 0) { modules[existing] = sharedModule; }
@@ -2338,15 +2272,11 @@ drawTable = function() {
 
 // ══════════════════════════════════════════════════════════════════
 //  SERVER SYNC + OFFLINE QUEUE
-//  Runs in every script context after init.
 // ══════════════════════════════════════════════════════════════════
-
-// ── Offline queue ────────────────────────────────────────────────
 const _OQ_KEY = 'bs_offline_response_queue';
 function _loadOQ()  { try { return JSON.parse(localStorage.getItem(_OQ_KEY)||'[]'); } catch { return []; } }
 function _saveOQ(q) { localStorage.setItem(_OQ_KEY, JSON.stringify(q)); }
 
-// POST one result to the server; queue it if offline
 async function _pushResponseToServer(rec) {
   try {
     const res = await fetch('/api/responses', {
@@ -2357,13 +2287,11 @@ async function _pushResponseToServer(rec) {
     if (res.ok) return;
     throw new Error('server ' + res.status);
   } catch {
-    // Store for later
     const q = _loadOQ();
     if (!q.some(r => r.id === rec.id)) { q.push(rec); _saveOQ(q); }
   }
 }
 
-// Flush offline queue when internet returns
 async function _flushOfflineQueue() {
   const q = _loadOQ();
   if (!q.length) return;
@@ -2386,7 +2314,6 @@ async function _flushOfflineQueue() {
 window.addEventListener('online', () => setTimeout(_flushOfflineQueue, 1000));
 window.addEventListener('load',   () => { if (navigator.onLine) setTimeout(_flushOfflineQueue, 3000); });
 
-// ── Pull server responses for author dashboard (cross-device) ────
 async function _pullServerResponses() {
   if (!currentAuthorId) return false;
   try {
@@ -2404,45 +2331,84 @@ async function _pullServerResponses() {
   } catch { return false; }
 }
 
-// ── Wrap renderAnalytics: pull from server first ─────────────────
+// Wrap renderAnalytics: pull from server before rendering
 const _baseRenderAnalyticsServer = renderAnalytics;
 renderAnalytics = async function() {
   if (currentRole === 'author' && currentAuthorId) {
     const el = document.getElementById('analytics-sync-status');
     if (el) { el.textContent = '🔄 Syncing…'; el.style.color = 'var(--txt3)'; }
     const got = await _pullServerResponses();
-    if (el) { el.textContent = got ? '✅ New results loaded' : ''; el.style.color = 'var(--green)'; }
+    if (el) { el.textContent = got ? '✅ Synced' : ''; el.style.color = 'var(--green)'; }
   }
   _baseRenderAnalyticsServer();
 };
 
-// ── Auto-refresh: responses (10s on analytics), modules (15s on home screens) ──
+// Auto-refresh dashboard every 30 s
 const _origGoScreenSync = goScreen;
-let   _syncPollInterval = null;
+let   _dashPollInterval = null;
 goScreen = function(id) {
   _origGoScreenSync(id);
-  clearInterval(_syncPollInterval); _syncPollInterval = null;
+  clearInterval(_dashPollInterval); _dashPollInterval = null;
   if (id === 's-analytics' && currentRole === 'author') {
-    _syncPollInterval = setInterval(async () => {
+    _dashPollInterval = setInterval(async () => {
       const got = await _pullServerResponses();
       if (got) {
-        renderAnalytics();
+        _baseRenderAnalyticsServer();
         const el = document.getElementById('analytics-sync-status');
-        if (el) { el.textContent = '✅ New results received!'; el.style.color = 'var(--green)'; }
+        if (el) { el.textContent = '✅ New results!'; el.style.color = 'var(--green)'; }
       }
-    }, 10000);
-  } else if (id === 's-author' && currentRole === 'author') {
-    _syncPollInterval = setInterval(async () => {
-      const changed = await _pullModulesFromServer(null);
-      if (changed) { renderAuthorList(); toast('☁️ Modules updated', 1800); }
-    }, 15000);
-  } else if (id === 's-home-user') {
-    _syncPollInterval = setInterval(async () => {
-      const changed = await _pullModulesFromServer(null);
-      if (changed) { renderUserPlayList(); }
-    }, 15000);
+    }, 30000);
   }
 };
+
+
+// ── Export modules for offline student use ──
+function exportForStudents(){
+  const myMods = modules.filter(m => !m.authorId || m.authorId===currentAuthorId);
+  if(!myMods.length){ toast('No modules to export'); return; }
+  const data = {
+    brainspark: true,
+    version: '1.1',
+    exportedAt: new Date().toISOString(),
+    authorId: currentAuthorId,
+    modules: myMods,
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'brainspark-modules.json';
+  a.click();
+  toast('✅ Exported ' + myMods.length + ' module' + (myMods.length!==1?'s':'') + ' for students!');
+}
+
+// ── Import results JSON sent back by students ──
+function importStudentResults(input){
+  const file = input.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if(!data.brainspark || data.type!=='results' || !Array.isArray(data.results)){
+        toast('❌ Invalid file — not a BrainSpark results file'); return;
+      }
+      const localIds = new Set(responses.map(r=>r.id));
+      let added = 0;
+      for(const r of data.results){
+        if(!localIds.has(r.id)){ responses.push(r); added++; }
+      }
+      saveResponses();
+      input.value = '';
+      if(added>0){
+        toast('✅ Imported ' + added + ' result' + (added!==1?'s':'') + ' from ' + (data.studentName||'student') + '!', 3500);
+        // If analytics screen is open, re-render
+        if(document.getElementById('s-analytics').classList.contains('active')) renderAnalytics();
+      } else {
+        toast('No new results — already up to date');
+      }
+    } catch(e){ toast('❌ Could not read file: ' + e.message); }
+  };
+  reader.readAsText(file);
+}
 
 </script>
 
@@ -2511,8 +2477,13 @@ goScreen = function(id) {
   </div>
 </div>
 
-<!-- VERSION BADGE -->
-<div id="version-badge" style="position:fixed;bottom:10px;right:12px;z-index:9990;font-size:10.5px;font-family:var(--fb);color:var(--txt3);background:rgba(17,17,28,0.7);border:.5px solid var(--bdr);border-radius:20px;padding:3px 9px;pointer-events:none;backdrop-filter:blur(8px);letter-spacing:.3px;">v1.4.0</div>
 
+<div style="position:fixed;bottom:12px;right:14px;font-size:10px;
+  font-family:monospace;color:rgba(255,255,255,0.18);
+  background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);
+  padding:3px 8px;border-radius:20px;pointer-events:none;z-index:9999;
+  user-select:none;letter-spacing:.5px">
+  v1.1
+</div>
 </body>
 </html>
