@@ -113,14 +113,18 @@ const server = http.createServer(async (req, res) => {
     return sendJSON(res, 200, { slug, url: shareUrl });
   }
 
-  // GET /api/modules (list) — optionally filter by ?authorId=...
+  // GET /api/modules (list) — ?authorId= for author-specific, or all public modules
   if (method === 'GET' && p === '/api/modules') {
     const authorId = urlObj.searchParams.get('authorId');
     const db = loadDB();
-    // db.authorModules stores modules saved/imported by authors: { [authorId]: { [moduleId]: module } }
-    if (!authorId) return sendJSON(res, 200, []);
-    const byAuthor = (db.authorModules || {})[authorId] || {};
-    return sendJSON(res, 200, Object.values(byAuthor));
+    if (authorId) {
+      // Return modules saved/imported by a specific author (from authorModules)
+      const byAuthor = (db.authorModules || {})[authorId] || {};
+      return sendJSON(res, 200, Object.values(byAuthor));
+    } else {
+      // Return ALL publicly published modules (for the global module library)
+      return sendJSON(res, 200, Object.values(db.modules || {}));
+    }
   }
 
   // GET /api/modules/:slug → fetch shared module (existing share-link flow)
@@ -133,6 +137,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   // PUT /api/modules/:id → upsert a module for an author (import / save / edit)
+  // Also saves to the public db.modules store so all users can access it.
   const putMatch = p.match(/^\/api\/modules\/([^/]+)$/);
   if (method === 'PUT' && putMatch) {
     let body;
@@ -142,10 +147,15 @@ const server = http.createServer(async (req, res) => {
       return sendJSON(res, 400, { error: 'Missing required fields: id, authorId' });
     }
     const db = loadDB();
+    const modRecord = { ...body, updatedAt: new Date().toISOString() };
+    // Save to author-specific store
     if (!db.authorModules) db.authorModules = {};
     if (!db.authorModules[body.authorId]) db.authorModules[body.authorId] = {};
-    db.authorModules[body.authorId][body.id] = { ...body, updatedAt: new Date().toISOString() };
+    db.authorModules[body.authorId][body.id] = modRecord;
+    // Also save to the global public store so all users see it
+    db.modules[body.id] = modRecord;
     saveDB(db);
+    console.log(`💾 Saved: "${body.title}" (id: ${body.id})`);
     return sendJSON(res, 200, { ok: true });
   }
 
@@ -157,8 +167,12 @@ const server = http.createServer(async (req, res) => {
     const db = loadDB();
     if (db.authorModules && db.authorModules[authorId]) {
       delete db.authorModules[authorId][delMatch[1]];
-      saveDB(db);
     }
+    // Also remove from the global public store
+    if (db.modules && db.modules[delMatch[1]]) {
+      delete db.modules[delMatch[1]];
+    }
+    saveDB(db);
     return sendJSON(res, 200, { ok: true });
   }
 

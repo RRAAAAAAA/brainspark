@@ -752,9 +752,12 @@ async function _deleteModuleFromServer(moduleId, authorId){
 }
 
 async function _pullModulesFromServer(authorId){
-  if(!authorId) return false;
+  // If authorId provided, pull author-specific modules; otherwise pull ALL public modules
+  const url = authorId
+    ? '/api/modules?authorId='+encodeURIComponent(authorId)
+    : '/api/modules';
   try{
-    const res=await fetch('/api/modules?authorId='+encodeURIComponent(authorId));
+    const res=await fetch(url);
     if(!res.ok) return false;
     const serverMods=await res.json();
     if(!Array.isArray(serverMods)||!serverMods.length) return false;
@@ -807,8 +810,9 @@ function seedDefaultData(){
       ]
     }];
     saveModules();
-  }
-}
+    // Push the default module to the server so it's visible to all users across devices
+    setTimeout(()=>_pushModuleToServer(modules[0]),500);
+  }}
 
 /* ══════════════════════════════════════════════════════
    AUTH
@@ -847,9 +851,12 @@ function doLogin(){
     currentRole='author'; currentAuthorId=author.id;
     document.getElementById('li-err').style.display='none';
     setupNav(); goScreen('s-home');
-    // Pull any server-saved modules for this author (runs in background)
-    _pullModulesFromServer(author.id).then(changed=>{
-      if(changed){ renderAuthorList(); toast('☁️ Modules synced from server',2200); }
+    // Pull ALL public modules + this author's specific modules from server
+    Promise.all([
+      _pullModulesFromServer(null),
+      _pullModulesFromServer(author.id)
+    ]).then(([allChanged, authorChanged])=>{
+      if(allChanged||authorChanged){ renderAuthorList(); toast('☁️ Modules synced from server',2200); }
     });
   } else {
     document.getElementById('li-err').style.display='block';
@@ -857,7 +864,13 @@ function doLogin(){
 }
 function loginUser(){
   currentRole='user'; currentAuthorId=null;
-  setupNav(); renderUserPlayList(); goScreen('s-home-user');
+  setupNav();
+  // Pull all modules from server so student sees everything
+  _pullModulesFromServer(null).then(changed=>{
+    renderUserPlayList();
+    if(changed) toast('☁️ Modules loaded from server',2000);
+  }).catch(()=>renderUserPlayList());
+  goScreen('s-home-user');
 }
 function logout(){
   currentRole=null; currentAuthorId=null;
@@ -1677,6 +1690,15 @@ async function exportModulePDF(id){
   loadAll();
   seedDefaultData();
   document.getElementById('loading-overlay').style.display='none';
+  // Pull all publicly published modules from the server on startup.
+  // This ensures any device — including first-time visitors — always
+  // sees modules created or imported from any other device.
+  _pullModulesFromServer(null).then(changed=>{
+    if(changed){
+      renderAuthorList && renderAuthorList();
+      renderUserPlayList && renderUserPlayList();
+    }
+  }).catch(()=>{});
 })();
 </script>
 
@@ -2480,7 +2502,7 @@ goScreen = function(id) {
 </div>
 
 <!-- VERSION BADGE -->
-<div id="version-badge" style="position:fixed;bottom:10px;right:12px;z-index:9990;font-size:10.5px;font-family:var(--fb);color:var(--txt3);background:rgba(17,17,28,0.7);border:.5px solid var(--bdr);border-radius:20px;padding:3px 9px;pointer-events:none;backdrop-filter:blur(8px);letter-spacing:.3px;">v1.2.0</div>
+<div id="version-badge" style="position:fixed;bottom:10px;right:12px;z-index:9990;font-size:10.5px;font-family:var(--fb);color:var(--txt3);background:rgba(17,17,28,0.7);border:.5px solid var(--bdr);border-radius:20px;padding:3px 9px;pointer-events:none;backdrop-filter:blur(8px);letter-spacing:.3px;">v1.3.0</div>
 
 </body>
 </html>
