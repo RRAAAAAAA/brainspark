@@ -2416,7 +2416,7 @@ renderAnalytics = async function() {
   _baseRenderAnalyticsServer();
 };
 
-// ── Auto-refresh dashboard every 30 s while author is on it ──────
+// ── Auto-refresh: responses (10s on analytics), modules (15s on home screens) ──
 const _origGoScreenSync = goScreen;
 let   _syncPollInterval = null;
 goScreen = function(id) {
@@ -2430,7 +2430,17 @@ goScreen = function(id) {
         const el = document.getElementById('analytics-sync-status');
         if (el) { el.textContent = '✅ New results received!'; el.style.color = 'var(--green)'; }
       }
-    }, 30000);
+    }, 10000);
+  } else if (id === 's-author' && currentRole === 'author') {
+    _syncPollInterval = setInterval(async () => {
+      const changed = await _pullModulesFromServer(null);
+      if (changed) { renderAuthorList(); toast('☁️ Modules updated', 1800); }
+    }, 15000);
+  } else if (id === 's-home-user') {
+    _syncPollInterval = setInterval(async () => {
+      const changed = await _pullModulesFromServer(null);
+      if (changed) { renderUserPlayList(); }
+    }, 15000);
   }
 };
 
@@ -2502,7 +2512,7 @@ goScreen = function(id) {
 </div>
 
 <!-- VERSION BADGE -->
-<div id="version-badge" style="position:fixed;bottom:10px;right:12px;z-index:9990;font-size:10.5px;font-family:var(--fb);color:var(--txt3);background:rgba(17,17,28,0.7);border:.5px solid var(--bdr);border-radius:20px;padding:3px 9px;pointer-events:none;backdrop-filter:blur(8px);letter-spacing:.3px;">v1.3.0</div>
+<div id="version-badge" style="position:fixed;bottom:10px;right:12px;z-index:9990;font-size:10.5px;font-family:var(--fb);color:var(--txt3);background:rgba(17,17,28,0.7);border:.5px solid var(--bdr);border-radius:20px;padding:3px 9px;pointer-events:none;backdrop-filter:blur(8px);letter-spacing:.3px;">v1.4.0</div>
 
 </body>
 </html>

@@ -176,6 +176,40 @@ const server = http.createServer(async (req, res) => {
     return sendJSON(res, 200, { ok: true });
   }
 
+  // POST /api/responses → store a student response record
+  if (method === 'POST' && p === '/api/responses') {
+    let body;
+    try { const raw = await readBody(req); body = JSON.parse(raw); }
+    catch { return sendJSON(res, 400, { error: 'Invalid JSON' }); }
+    if (!body || !body.id || !body.moduleId) {
+      return sendJSON(res, 400, { error: 'Missing required fields: id, moduleId' });
+    }
+    const db = loadDB();
+    if (!db.responses) db.responses = {};
+    db.responses[body.id] = { ...body, savedAt: new Date().toISOString() };
+    saveDB(db);
+    console.log(`📊 Response: "${body.studentName || 'anon'}" on "${body.moduleTitle}"`);
+    return sendJSON(res, 200, { ok: true });
+  }
+
+  // GET /api/responses/:authorId → all responses for this author's modules
+  const respMatch = p.match(/^\/api\/responses\/(.+)$/);
+  if (method === 'GET' && respMatch) {
+    const authorId = decodeURIComponent(respMatch[1]);
+    const db = loadDB();
+    if (!db.responses) return sendJSON(res, 200, []);
+    // Collect all moduleIds belonging to this author
+    const authorModuleIds = new Set();
+    Object.values((db.authorModules || {})[authorId] || {})
+      .forEach(m => authorModuleIds.add(m.id));
+    Object.values(db.modules || {})
+      .filter(m => m.authorId === authorId)
+      .forEach(m => authorModuleIds.add(m.id));
+    const recs = Object.values(db.responses)
+      .filter(r => authorModuleIds.has(r.moduleId));
+    return sendJSON(res, 200, recs);
+  }
+
   // GET /m/:slug → redirect to player
   const mMatch = p.match(/^\/m\/([a-f0-9]{6,16})$/);
   if (method === 'GET' && mMatch) {
