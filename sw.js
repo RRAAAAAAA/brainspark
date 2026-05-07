@@ -10,7 +10,7 @@
  *  CDN assets        → cache on first use
  */
 
-const CACHE   = 'brainspark-v2';
+const CACHE   = 'brainspark-v3';
 const SHELL   = ['/index.html', '/'];
 
 self.addEventListener('install', e => {
