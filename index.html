@@ -1,0 +1,2530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<title>BrainSpark Studio</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,400&display=swap" rel="stylesheet"/>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+/* ══ TOKENS ══ */
+:root {
+  --bg:#080810;--surf:#11111c;--surf2:#191926;--surf3:#21212f;--surf4:#2a2a3a;
+  --bdr:rgba(255,255,255,0.06);--bdr2:rgba(255,255,255,0.11);--bdr3:rgba(255,255,255,0.18);
+  --acc:#7b6ef6;--acc-lt:#a095ff;--acc-glow:rgba(123,110,246,0.3);
+  --gold:#f5c247;--green:#3ecf8e;--red:#f56565;
+  --gbg:rgba(62,207,142,0.1);--rbg:rgba(245,101,101,0.1);
+  --txt:#eeeef5;--txt2:rgba(238,238,245,0.55);--txt3:rgba(238,238,245,0.25);
+  --r:12px;--rs:8px;--fh:'Syne',sans-serif;--fb:'DM Sans',sans-serif;--nav-h:60px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html{height:100%;-webkit-text-size-adjust:100%;}
+body{background:var(--bg);color:var(--txt);font-family:var(--fb);font-size:15px;line-height:1.6;min-height:100%;overflow-x:hidden;}
+img{max-width:100%;height:auto;display:block;}
+button,input,select,textarea{font-family:var(--fb);}
+button{cursor:pointer;}
+a{color:inherit;text-decoration:none;}
+
+/* ══ AMBIENT ══ */
+.orb{position:fixed;border-radius:50%;pointer-events:none;z-index:0;}
+.orb1{width:600px;height:600px;top:-200px;left:-180px;background:radial-gradient(circle,rgba(123,110,246,0.12) 0%,transparent 70%);}
+.orb2{width:500px;height:500px;bottom:-150px;right:-140px;background:radial-gradient(circle,rgba(245,194,71,0.08) 0%,transparent 70%);}
+
+/* ══ SCREENS ══ */
+.wrap{position:relative;z-index:1;max-width:780px;margin:0 auto;padding:0 16px 80px;}
+.screen{display:none;animation:fadeUp .3s ease both;padding-top:24px;}
+.screen.active{display:block;}
+@keyframes fadeUp{from{opacity:0;transform:translateY(16px);}to{opacity:1;transform:translateY(0);}}
+
+/* ══ NAV ══ */
+.topnav{position:sticky;top:0;z-index:100;background:rgba(8,8,16,0.85);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:.5px solid var(--bdr);height:var(--nav-h);display:flex;align-items:center;justify-content:space-between;padding:0 16px;gap:12px;}
+.nav-logo{display:flex;align-items:center;gap:8px;flex-shrink:0;}
+.nav-mark{width:32px;height:32px;background:var(--acc);border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:var(--fh);font-weight:800;font-size:15px;color:#fff;box-shadow:0 0 16px var(--acc-glow);}
+.nav-name{font-family:var(--fh);font-size:16px;font-weight:700;white-space:nowrap;}
+.nav-name em{font-style:normal;color:var(--acc);}
+.nav-name small{display:none;}
+.nav-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.nav-badge{font-size:11px;padding:3px 10px;border-radius:20px;font-weight:500;white-space:nowrap;}
+.nav-badge.author{background:rgba(245,194,71,0.15);color:var(--gold);border:.5px solid rgba(245,194,71,0.3);}
+.nav-badge.user{background:rgba(123,110,246,0.15);color:var(--acc-lt);border:.5px solid rgba(123,110,246,0.3);}
+@media(min-width:480px){.nav-name small{display:inline;font-size:11px;color:var(--txt2);margin-left:5px;font-weight:400;letter-spacing:.3px;}}
+
+/* ══ TYPOGRAPHY ══ */
+.h1{font-family:var(--fh);font-size:clamp(28px,5vw,44px);font-weight:800;line-height:1.1;letter-spacing:-1px;margin-bottom:.75rem;}
+.h1 em{font-style:normal;color:var(--acc);}
+.h2{font-family:var(--fh);font-size:clamp(20px,3vw,28px);font-weight:700;line-height:1.2;letter-spacing:-.5px;margin-bottom:.5rem;}
+.h2 em{font-style:normal;color:var(--acc);}
+.sub{font-size:14px;color:var(--txt2);margin-bottom:1.75rem;max-width:440px;line-height:1.6;}
+.section-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:1rem;flex-wrap:wrap;}
+.section-title{font-size:13.5px;font-weight:600;color:var(--txt);}
+.divider{height:.5px;background:var(--bdr);margin:1.25rem 0;}
+
+/* ══ BUTTONS ══ */
+.btn{border:none;border-radius:var(--rs);padding:10px 18px;font-size:13.5px;font-weight:500;cursor:pointer;transition:opacity .15s,transform .12s,background .15s;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;flex-shrink:0;}
+.btn:active{transform:scale(.97);}
+.btn-p{background:var(--acc);color:#fff;box-shadow:0 3px 12px var(--acc-glow);}
+.btn-p:hover{opacity:.88;}
+.btn-g{background:var(--surf2);color:var(--txt2);border:.5px solid var(--bdr2);}
+.btn-g:hover{background:var(--surf3);color:var(--txt);}
+.btn-d{background:var(--rbg);color:var(--red);border:.5px solid rgba(245,101,101,.25);}
+.btn-d:hover{background:rgba(245,101,101,.18);}
+.btn-o{background:rgba(245,194,71,.1);color:var(--gold);border:.5px solid rgba(245,194,71,.25);}
+.btn-o:hover{background:rgba(245,194,71,.18);}
+.btn-sm{padding:7px 13px;font-size:12.5px;}
+.btn-xs{padding:5px 10px;font-size:12px;}
+.brow{display:flex;gap:8px;flex-wrap:wrap;}
+.brow.right{justify-content:flex-end;}
+
+/* ══ CARDS ══ */
+.card{background:var(--surf);border:.5px solid var(--bdr);border-radius:var(--r);padding:1.25rem;}
+
+/* ══ FORM ══ */
+.lbl{display:block;font-size:11.5px;font-weight:500;color:var(--txt2);text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px;}
+.inp{width:100%;background:var(--surf2);border:.5px solid var(--bdr2);border-radius:var(--rs);padding:10px 12px;font-size:14px;color:var(--txt);outline:none;transition:border-color .15s;}
+.inp:focus{border-color:var(--acc);}
+textarea.inp{resize:vertical;min-height:72px;}
+select.inp{cursor:pointer;}
+select.inp option{background:var(--surf2);}
+.field{margin-bottom:1rem;}
+.field-2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+@media(max-width:480px){.field-2{grid-template-columns:1fr;}}
+
+/* ══ TABS ══ */
+.tabs{display:flex;gap:3px;background:var(--surf2);border-radius:var(--rs);padding:3px;margin-bottom:1.25rem;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+.tabs::-webkit-scrollbar{display:none;}
+.tab{flex:1;min-width:fit-content;text-align:center;padding:8px 12px;border-radius:6px;font-size:13px;cursor:pointer;color:var(--txt2);transition:all .18s;border:none;background:none;font-family:var(--fb);white-space:nowrap;}
+.tab.active{background:var(--surf3);color:var(--txt);font-weight:500;border:.5px solid var(--bdr2);}
+
+/* ══ PROGRESS ══ */
+.prow{display:flex;justify-content:space-between;margin-bottom:7px;}
+.plbl{font-size:13px;color:var(--txt2);}
+.pscr{font-size:13px;font-weight:500;color:var(--acc);}
+.ptrack{height:4px;background:var(--surf2);border-radius:2px;margin-bottom:1.25rem;overflow:hidden;}
+.pfill{height:100%;background:linear-gradient(90deg,var(--acc),var(--acc-lt));border-radius:2px;transition:width .4s cubic-bezier(.4,0,.2,1);}
+
+/* ══ BADGES ══ */
+.pill{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:11.5px;font-weight:500;}
+.pill-acc{background:rgba(123,110,246,.18);color:var(--acc-lt);}
+.pill-gold{background:rgba(245,194,71,.15);color:var(--gold);}
+.pill-g{background:rgba(62,207,142,.13);color:var(--green);}
+.pill-r{background:rgba(245,101,101,.13);color:var(--red);}
+
+/* ══ TOAST ══ */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--surf3);border:.5px solid var(--bdr2);border-radius:var(--rs);padding:10px 20px;font-size:13.5px;z-index:9999;opacity:0;transition:all .3s;pointer-events:none;white-space:nowrap;color:var(--txt);}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0);}
+
+/* ══ MODAL ══ */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:800;align-items:center;justify-content:center;padding:16px;}
+.overlay.open{display:flex;}
+.modal{background:var(--surf);border:.5px solid var(--bdr2);border-radius:var(--r);padding:1.5rem;width:100%;max-width:540px;max-height:90vh;overflow-y:auto;animation:fadeUp .25s ease both;}
+.modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;}
+.modal-title{font-family:var(--fh);font-size:18px;font-weight:700;}
+.modal-x{background:none;border:none;color:var(--txt2);font-size:22px;line-height:1;padding:2px 6px;border-radius:4px;transition:color .15s;}
+.modal-x:hover{color:var(--txt);}
+
+/* ══ EMPTY STATE ══ */
+.empty{text-align:center;padding:2.5rem 1rem;color:var(--txt2);}
+.empty-icon{font-size:30px;margin-bottom:10px;display:block;opacity:.5;}
+.empty-txt{font-size:13.5px;}
+
+/* ══ LOGIN ══ */
+#s-login{min-height:calc(100vh - var(--nav-h));flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:2rem 1rem;}
+#s-login.active{display:flex;}
+.login-box{background:var(--surf);border:.5px solid var(--bdr2);border-radius:18px;padding:2.25rem 2rem;width:100%;max-width:360px;}
+.login-icon{font-size:36px;margin-bottom:1rem;}
+
+/* ══ HOME GRID ══ */
+.home-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:1.5rem;}
+@media(max-width:400px){.home-grid{grid-template-columns:1fr;}}
+.home-card{background:var(--surf);border:.5px solid var(--bdr);border-radius:var(--r);padding:1.4rem 1.2rem;cursor:pointer;transition:border-color .2s,transform .18s,box-shadow .2s;position:relative;overflow:hidden;}
+.home-card::before{content:'';position:absolute;inset:0;opacity:0;transition:opacity .25s;border-radius:var(--r);}
+.home-card.hc-play::before{background:radial-gradient(circle at 30% 30%,rgba(123,110,246,.2),transparent 65%);}
+.home-card.hc-auth::before{background:radial-gradient(circle at 30% 30%,rgba(245,194,71,.15),transparent 65%);}
+.home-card.hc-db::before{background:radial-gradient(circle at 30% 30%,rgba(62,207,142,.15),transparent 65%);}
+.home-card.hc-sync::before{background:radial-gradient(circle at 30% 30%,rgba(245,101,101,.12),transparent 65%);}
+.home-card:hover{border-color:var(--bdr2);transform:translateY(-3px);box-shadow:0 12px 32px rgba(0,0,0,.35);}
+.home-card:hover::before{opacity:1;}
+.home-card:active{transform:scale(.97);}
+.hc-icon{font-size:26px;margin-bottom:10px;display:block;}
+.hc-title{font-family:var(--fh);font-size:16px;font-weight:700;margin-bottom:4px;}
+.hc-desc{font-size:12px;color:var(--txt2);line-height:1.5;}
+.hc-tag{display:inline-block;margin-top:10px;font-size:10.5px;font-weight:500;letter-spacing:.3px;padding:2px 9px;border-radius:20px;}
+
+/* ══ MODULE ITEMS ══ */
+.mod-list{display:grid;gap:8px;margin-bottom:1rem;}
+.mod-item{background:var(--surf);border:.5px solid var(--bdr);border-radius:var(--r);padding:.9rem 1rem;display:flex;align-items:center;gap:12px;transition:border-color .15s;}
+.mod-item:hover{border-color:var(--bdr2);}
+.mi-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
+.mi-icon.lesson{background:rgba(123,110,246,.18);}
+.mi-icon.quiz{background:rgba(123,110,246,.18);}
+.mi-icon.slide{background:rgba(245,194,71,.15);}
+.mi-icon.unified{background:rgba(62,207,142,.13);}
+.mi-body{flex:1;min-width:0;}
+.mi-title{font-weight:500;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.mi-meta{font-size:12px;color:var(--txt2);margin-top:2px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.mi-actions{display:flex;gap:5px;flex-shrink:0;align-items:center;}
+
+/* ══ UNIFIED MODULE PLAYER ══ */
+.module-player{position:relative;}
+.mp-page{background:var(--surf);border:.5px solid var(--bdr);border-radius:var(--r);padding:1.5rem;margin-bottom:1rem;animation:fadeUp .3s ease both;}
+
+/* lesson/content page */
+.mp-lesson{}
+.mp-lesson-body{font-size:15px;line-height:1.75;color:var(--txt);margin-bottom:1rem;}
+.mp-lesson-body img{border-radius:var(--rs);max-height:260px;width:100%;object-fit:contain;margin:12px 0;}
+.mp-lesson-body video,.mp-lesson-body audio{width:100%;border-radius:var(--rs);margin:12px 0;}
+.mp-lesson-body iframe{width:100%;border-radius:var(--rs);border:none;margin:12px 0;}
+.mp-lesson-body a{color:var(--acc-lt);text-decoration:underline;}
+.mp-page-label{font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--acc);margin-bottom:8px;}
+.mp-page-title{font-family:var(--fh);font-size:clamp(16px,3vw,22px);font-weight:700;margin-bottom:1rem;letter-spacing:-.2px;}
+
+/* question page */
+.mp-question{}
+.mp-q-text{font-family:var(--fh);font-size:clamp(15px,2.5vw,18px);font-weight:700;line-height:1.4;margin-bottom:1.25rem;letter-spacing:-.2px;}
+.mp-q-img{width:100%;max-height:200px;object-fit:contain;border-radius:var(--rs);margin-bottom:1rem;border:.5px solid var(--bdr);}
+.ogrid{display:grid;gap:7px;}
+.obtn{width:100%;text-align:left;background:var(--surf2);border:.5px solid var(--bdr);border-radius:var(--rs);padding:11px 12px;font-size:13.5px;font-family:var(--fb);color:var(--txt);cursor:pointer;transition:border-color .15s,background .15s;display:flex;align-items:center;gap:10px;}
+.obtn:hover:not(:disabled){border-color:var(--bdr2);background:var(--surf3);}
+.oltr{width:24px;height:24px;border-radius:5px;background:rgba(255,255,255,.07);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;font-family:var(--fh);transition:background .15s,color .15s;}
+.obtn.correct{background:var(--gbg);border-color:var(--green);color:var(--green);}
+.obtn.correct .oltr{background:var(--green);color:#0d1a13;}
+.obtn.wrong{background:var(--rbg);border-color:var(--red);color:var(--red);}
+.obtn.wrong .oltr{background:var(--red);color:#1a0d0d;}
+.mp-fb{border-radius:var(--rs);padding:10px 14px;font-size:13.5px;margin-top:.75rem;line-height:1.55;border:.5px solid transparent;display:none;}
+.mp-fb.ok{background:var(--gbg);border-color:rgba(62,207,142,.3);color:#6ee7b7;}
+.mp-fb.err{background:var(--rbg);border-color:rgba(245,101,101,.3);color:#fca5a5;}
+.mp-fitb-inp{font-size:16px;padding:12px 14px;margin-bottom:10px;}
+
+/* navigation footer */
+.mp-footer{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:1rem 0;}
+.mp-counter{font-size:13px;color:var(--txt2);}
+.mp-nav{display:flex;gap:8px;align-items:center;}
+.mp-progress-bar{height:3px;background:var(--surf2);border-radius:2px;margin-bottom:1rem;overflow:hidden;}
+.mp-progress-fill{height:100%;background:linear-gradient(90deg,var(--acc),var(--acc-lt));border-radius:2px;transition:width .4s cubic-bezier(.4,0,.2,1);}
+
+/* clickable activity button in lesson */
+.activity-btn{display:inline-flex;align-items:center;gap:8px;background:rgba(123,110,246,.15);color:var(--acc-lt);border:.5px solid rgba(123,110,246,.3);border-radius:var(--rs);padding:10px 16px;font-size:13.5px;font-weight:500;cursor:pointer;transition:all .18s;margin:4px 0;}
+.activity-btn:hover{background:rgba(123,110,246,.25);}
+
+/* ══ UNIFIED EDITOR ══ */
+.ued-pages{display:grid;gap:8px;margin-bottom:1rem;}
+.ued-page{background:var(--surf);border:.5px solid var(--bdr);border-radius:var(--r);padding:.9rem 1rem;display:flex;align-items:center;gap:10px;}
+.ued-page-num{width:28px;height:28px;border-radius:7px;background:var(--surf2);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--acc);flex-shrink:0;}
+.ued-page-body{flex:1;min-width:0;}
+.ued-page-type{font-size:11px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--txt3);margin-bottom:2px;}
+.ued-page-title{font-size:13.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ued-actions{display:flex;gap:5px;flex-shrink:0;}
+
+/* rich text toolbar */
+.rtb{display:flex;gap:4px;flex-wrap:wrap;padding:.5rem;background:var(--surf2);border:.5px solid var(--bdr);border-radius:var(--rs) var(--rs) 0 0;border-bottom:none;}
+.rtb-btn{background:none;border:none;color:var(--txt2);padding:4px 7px;border-radius:4px;font-size:13px;cursor:pointer;transition:background .15s,color .15s;line-height:1;}
+.rtb-btn:hover{background:var(--surf3);color:var(--txt);}
+.rtb-btn.active{background:var(--surf4);color:var(--acc-lt);}
+.rtb-sep{width:.5px;height:18px;background:var(--bdr2);margin:0 2px;align-self:center;flex-shrink:0;}
+.rich-editor{background:var(--surf2);border:.5px solid var(--bdr);border-radius:0 0 var(--rs) var(--rs);padding:10px 12px;min-height:120px;outline:none;font-size:14px;color:var(--txt);line-height:1.7;}
+.rich-editor:focus{border-color:var(--acc);}
+.rich-editor a{color:var(--acc-lt);}
+.rich-editor img{max-width:100%;border-radius:6px;margin:4px 0;}
+
+/* ══ RESULT ══ */
+.rhero{background:var(--surf);border:.5px solid var(--bdr);border-radius:var(--r);padding:2rem 1.5rem;text-align:center;margin-bottom:1rem;position:relative;overflow:hidden;}
+.rhero::before{content:'';position:absolute;top:-60px;left:50%;transform:translateX(-50%);width:280px;height:280px;background:radial-gradient(circle,rgba(123,110,246,.18),transparent 70%);pointer-events:none;}
+.rpct{font-family:var(--fh);font-size:clamp(56px,12vw,72px);font-weight:800;color:var(--acc);letter-spacing:-3px;line-height:1;margin-bottom:6px;position:relative;}
+.rsub{font-size:14px;color:var(--txt2);margin-bottom:14px;}
+.rstats{display:flex;gap:8px;margin-bottom:1rem;}
+.stat{flex:1;background:var(--surf);border:.5px solid var(--bdr);border-radius:var(--rs);padding:12px 8px;text-align:center;}
+.snum{font-family:var(--fh);font-size:clamp(18px,4vw,22px);font-weight:700;}
+.slbl{font-size:11px;color:var(--txt2);margin-top:2px;}
+.stat.ok .snum{color:var(--green);}
+.stat.bad .snum{color:var(--red);}
+.ractn{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;}
+
+/* ══ ANALYTICS ══ */
+.analytics-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:1.25rem;}
+.stat-card{background:var(--surf);border:.5px solid var(--bdr);border-radius:var(--r);padding:1rem;}
+.stat-card .big{font-family:var(--fh);font-size:30px;font-weight:800;color:var(--acc);line-height:1;margin-bottom:4px;}
+.stat-card .lbl{font-size:12px;color:var(--txt2);}
+.chart-wrap{background:var(--surf);border:.5px solid var(--bdr);border-radius:var(--r);padding:1.25rem;margin-bottom:1rem;}
+.chart-title{font-size:13px;font-weight:600;margin-bottom:1rem;}
+canvas{max-width:100%;}
+.resp-table-wrap{overflow-x:auto;margin-bottom:1rem;}
+.resp-table{width:100%;border-collapse:collapse;font-size:13px;}
+.resp-table th{text-align:left;padding:8px 10px;font-size:11.5px;color:var(--txt2);text-transform:uppercase;letter-spacing:.5px;border-bottom:.5px solid var(--bdr);font-weight:500;}
+.resp-table td{padding:9px 10px;border-bottom:.5px solid var(--bdr);vertical-align:middle;}
+.resp-table tr:last-child td{border-bottom:none;}
+.resp-table tr:hover td{background:rgba(255,255,255,.02);}
+
+/* ══ BACK BUTTON ══ */
+.back{display:inline-flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;margin-bottom:1.25rem;background:none;border:none;color:var(--txt2);transition:color .15s;}
+.back:hover{color:var(--txt);}
+
+/* ══ CHART BUILDER ══ */
+.chart-builder-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:1rem;}
+@media(max-width:480px){.chart-builder-grid{grid-template-columns:1fr;}}
+.chart-type-btn{background:var(--surf2);border:.5px solid var(--bdr2);border-radius:var(--rs);padding:10px;text-align:center;cursor:pointer;transition:all .18s;font-size:13px;color:var(--txt2);}
+.chart-type-btn:hover,.chart-type-btn.selected{background:rgba(123,110,246,.18);border-color:var(--acc);color:var(--acc-lt);}
+.chart-data-row{display:grid;grid-template-columns:1fr 80px 30px;gap:6px;margin-bottom:6px;align-items:center;}
+#cb-preview-canvas{width:100%;border-radius:var(--rs);background:var(--surf2);display:block;}
+
+/* ══ STOPWATCH ══ */
+.mp-stopwatch{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--txt2);background:var(--surf2);border:.5px solid var(--bdr);border-radius:20px;padding:4px 12px;font-variant-numeric:tabular-nums;letter-spacing:.5px;}
+.mp-stopwatch-dot{width:7px;height:7px;border-radius:50%;background:var(--green);animation:sw-pulse 1s ease-in-out infinite;}
+@keyframes sw-pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+
+/* ══ SYNC / EXPORT ══ */
+.sync-box{background:var(--surf2);border:.5px solid var(--bdr2);border-radius:var(--r);padding:1.25rem;margin-bottom:1rem;}
+.sync-box h4{font-family:var(--fh);font-size:15px;font-weight:700;margin-bottom:.5rem;}
+.sync-box p{font-size:13px;color:var(--txt2);line-height:1.6;margin-bottom:.75rem;}
+.sync-methods{display:flex;gap:8px;flex-wrap:wrap;}
+
+/* ══ PDF BTN ══ */
+.pdf-btn{display:inline-flex;align-items:center;gap:6px;background:var(--rbg);color:var(--red);border:.5px solid rgba(245,101,101,.25);border-radius:var(--rs);padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer;transition:background .15s;flex-shrink:0;}
+.pdf-btn:hover{background:rgba(245,101,101,.18);}
+
+/* ══ RESPONSIVE ══ */
+@media(max-width:520px){
+  .wrap{padding:0 12px 80px;}
+  .card{padding:1rem;}
+  .modal{padding:1.25rem;}
+  .brow{gap:6px;}
+  .btn{padding:9px 14px;}
+  .btn-sm{padding:6px 11px;font-size:12px;}
+  .mi-icon{width:36px;height:36px;font-size:16px;border-radius:8px;}
+  .mod-item{padding:.8rem;gap:10px;}
+  .home-card{padding:1.1rem 1rem;}
+  .hc-icon{font-size:22px;}
+  .hc-title{font-size:15px;}
+  .rstats{gap:6px;}
+  .stat{padding:10px 6px;}
+  .mp-page{padding:1.1rem;}
+}
+@media(max-width:380px){
+  .mi-actions{flex-direction:column;}
+  .brow.right{justify-content:flex-start;}
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<div class="orb orb1"></div>
+<div class="orb orb2"></div>
+
+<!-- NAV -->
+<nav class="topnav" id="topnav" style="display:none">
+  <div class="nav-logo">
+    <div class="nav-mark">B</div>
+    <div class="nav-name">Brain<em>Spark</em><small>Studio</small></div>
+  </div>
+  <div class="nav-right">
+    <span class="nav-badge" id="nav-role-badge">Author</span>
+    <button class="btn btn-g btn-sm" id="nav-account" onclick="openAccountSettings()" style="display:none">⚙</button>
+    <button class="btn btn-g btn-sm" onclick="logout()">Sign out</button>
+  </div>
+</nav>
+
+<div class="wrap">
+
+<!-- ════ LOGIN ════ -->
+<div class="screen active" id="s-login">
+  <div class="login-box">
+    <div class="login-icon">🔐</div>
+    <div class="h2" style="margin-bottom:.3rem">Welcome back</div>
+    <p style="font-size:13.5px;color:var(--txt2);margin-bottom:1.25rem">Sign in or create an author account</p>
+    <div class="tabs" style="margin-bottom:1.25rem">
+      <button class="tab active" id="tab-signin" onclick="switchLoginTab('signin')">Sign In</button>
+      <button class="tab" id="tab-register" onclick="switchLoginTab('register')">Register</button>
+    </div>
+    <div id="login-signin-form">
+      <div class="field"><label class="lbl">Username</label><input class="inp" id="li-user" placeholder="your username" autocomplete="username"/></div>
+      <div class="field"><label class="lbl">Password</label><input class="inp" id="li-pass" type="password" placeholder="password" autocomplete="current-password"/></div>
+      <p id="li-err" style="color:var(--red);font-size:13px;margin-bottom:.75rem;display:none">Invalid username or password</p>
+      <button class="btn btn-p" style="width:100%;justify-content:center" onclick="doLogin()">Sign In</button>
+    </div>
+    <div id="login-register-form" style="display:none">
+      <div class="field"><label class="lbl">Username</label><input class="inp" id="reg-user" placeholder="choose a username" autocomplete="username"/></div>
+      <div class="field"><label class="lbl">Password</label><input class="inp" id="reg-pass" type="password" placeholder="min 6 characters" autocomplete="new-password"/></div>
+      <div class="field"><label class="lbl">Confirm password</label><input class="inp" id="reg-pass2" type="password" placeholder="repeat password" autocomplete="new-password"/></div>
+      <p id="reg-err" style="color:var(--red);font-size:13px;margin-bottom:.75rem;display:none">Error</p>
+      <button class="btn btn-p" style="width:100%;justify-content:center" onclick="doRegister()">Create account</button>
+    </div>
+    <div style="margin-top:1rem;padding-top:1rem;border-top:.5px solid var(--bdr)">
+      <p style="font-size:12px;color:var(--txt2);margin-bottom:.5rem">Student access — no account needed</p>
+      <button class="btn btn-g btn-sm" style="width:100%;justify-content:center" onclick="loginUser()">Continue as student</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════ HOME (AUTHOR) ════ -->
+<div class="screen" id="s-home">
+  <div style="margin-bottom:1.75rem">
+    <div class="h1">Learn by<br/><em>doing.</em></div>
+    <p class="sub">Full author access — create, manage and track interactive learning modules.</p>
+  </div>
+  <div class="home-grid">
+    <div class="home-card hc-play" onclick="goScreen('s-player');renderPlayList()">
+      <span class="hc-icon">▶️</span>
+      <div class="hc-title">Play</div>
+      <div class="hc-desc">Experience interactive modules as a student</div>
+      <span class="hc-tag pill-acc">Student view</span>
+    </div>
+    <div class="home-card hc-auth" onclick="goScreen('s-author');renderAuthorList()">
+      <span class="hc-icon">✏️</span>
+      <div class="hc-title">Author Studio</div>
+      <div class="hc-desc">Build page-by-page interactive modules</div>
+      <span class="hc-tag pill-gold">Author mode</span>
+    </div>
+    <div class="home-card hc-db" onclick="goScreen('s-analytics');renderAnalytics()">
+      <span class="hc-icon">📊</span>
+      <div class="hc-title">Analytics</div>
+      <div class="hc-desc">View responses, scores, and completion data</div>
+      <span class="hc-tag pill-g">Research DB</span>
+    </div>
+    <div class="home-card hc-sync" onclick="goScreen('s-sync')">
+      <span class="hc-icon">🔄</span>
+      <div class="hc-title">Sync &amp; Export</div>
+      <div class="hc-desc">Manually share modules across devices</div>
+      <span class="hc-tag pill-r">Offline-first</span>
+    </div>
+  </div>
+</div>
+
+<!-- ════ HOME (USER/STUDENT) ════ -->
+<div class="screen" id="s-home-user">
+  <div style="margin-bottom:1.75rem">
+    <div class="h1">Welcome to<br/><em>BrainSpark.</em></div>
+    <p class="sub">Choose a module below to start learning.</p>
+  </div>
+  <div class="tabs">
+    <button class="tab active" onclick="filterMods('all',this)">All</button>
+    <button class="tab" onclick="filterMods('unified',this)">Interactive</button>
+  </div>
+  <div class="mod-list" id="user-play-list"></div>
+  <div id="user-play-empty" class="empty" style="display:none"><span class="empty-icon">📭</span><div class="empty-txt">No modules yet.</div></div>
+</div>
+
+<!-- ════ AUTHOR HUB ════ -->
+<div class="screen" id="s-author">
+  <button class="back" onclick="goScreen('s-home')">← Home</button>
+  <div class="section-row">
+    <div><div class="h2">Author <em>Studio</em></div><div style="font-size:13px;color:var(--txt2)">Build interactive modules page by page</div></div>
+    <button class="btn btn-p btn-sm" onclick="openNewModule()">+ New Module</button>
+  </div>
+  <div class="mod-list" id="author-list"></div>
+  <div id="author-empty" class="empty" style="display:none"><span class="empty-icon">📭</span><div class="empty-txt">No modules yet. Create one above.</div></div>
+</div>
+
+<!-- ════ UNIFIED EDITOR ════ -->
+<div class="screen" id="s-editor">
+  <button class="back" onclick="goScreen('s-author');renderAuthorList()">← Author Studio</button>
+  <div class="field"><label class="lbl">Module title</label><input class="inp" id="ed-title" placeholder="e.g. Introduction to Science"/></div>
+  <div class="field"><label class="lbl">Description (optional)</label><input class="inp" id="ed-desc" placeholder="A short description…"/></div>
+  <div class="divider"></div>
+  <div class="section-row">
+    <div class="section-title">Pages <span id="ed-page-count" style="font-size:11px;color:var(--txt3)"></span></div>
+    <div class="brow">
+      <button class="btn btn-g btn-sm" onclick="addPage('lesson')">+ Lesson</button>
+      <button class="btn btn-p btn-sm" onclick="addPage('question')">+ Question</button>
+    </div>
+  </div>
+  <div class="ued-pages" id="ued-pages"></div>
+  <div id="ued-empty" class="empty" style="display:none"><span class="empty-icon">📄</span><div class="empty-txt">No pages yet. Add a Lesson or Question above.</div></div>
+  <div class="divider"></div>
+  <div class="brow right">
+    <button class="btn btn-g" onclick="goScreen('s-author');renderAuthorList()">Cancel</button>
+    <button class="btn btn-p" onclick="saveModule()">Save module</button>
+  </div>
+</div>
+
+<!-- ════ PLAYER HUB ════ -->
+<div class="screen" id="s-player">
+  <button class="back" onclick="goScreen('s-home')">← Home</button>
+  <div class="h2" style="margin-bottom:.3rem">Choose a <em>module</em></div>
+  <p class="sub" style="margin-bottom:1.25rem">Play any interactive module or export PDF.</p>
+  <div class="mod-list" id="play-list"></div>
+  <div id="play-empty" class="empty" style="display:none"><span class="empty-icon">📭</span><div class="empty-txt">No modules found.</div></div>
+</div>
+
+<!-- ════ UNIFIED MODULE PLAYER ════ -->
+<div class="screen" id="s-module-player">
+  <div class="prow" style="margin-bottom:5px">
+    <button class="back" style="margin:0" id="mp-back-btn">← Back</button>
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
+      <span class="mp-counter" id="mp-counter">Page 1 / 1</span>
+      <div class="mp-stopwatch" id="mp-stopwatch" style="display:none">
+        <span class="mp-stopwatch-dot" id="sw-dot"></span>
+        <span id="sw-display">0:00</span>
+      </div>
+      <button class="pdf-btn" id="mp-pdf" style="display:none;padding:6px 10px;font-size:12px" onclick="exportModulePDF(currentModuleId)">⬇ PDF</button>
+    </div>
+  </div>
+  <div class="mp-progress-bar"><div class="mp-progress-fill" id="mp-pfill" style="width:0%"></div></div>
+  <div id="mp-page-render"></div>
+  <div class="mp-footer">
+    <button class="btn btn-g" id="mp-prev-btn" onclick="navModule(-1)">← Prev</button>
+    <button class="btn btn-p" id="mp-next-btn" onclick="navModule(1)">Next →</button>
+  </div>
+</div>
+
+<!-- ════ RESULT ════ -->
+<div class="screen" id="s-result">
+  <div class="rhero">
+    <div class="rpct" id="r-pct"></div>
+    <div class="rsub" id="r-sub"></div>
+    <div id="r-badge"></div>
+  </div>
+  <div class="rstats">
+    <div class="stat ok"><div class="snum" id="r-ok"></div><div class="slbl">Correct</div></div>
+    <div class="stat bad"><div class="snum" id="r-bad"></div><div class="slbl">Incorrect</div></div>
+    <div class="stat"><div class="snum" id="r-tot" style="color:var(--acc)"></div><div class="slbl">Questions</div></div>
+    <div class="stat"><div class="snum" id="r-time" style="color:var(--gold)">—</div><div class="slbl">Time</div></div>
+  </div>
+  <div class="ractn">
+    <button class="btn btn-g" onclick="backFromResult()">← Back</button>
+    <button class="btn btn-p" id="r-retry">Retry</button>
+  </div>
+</div>
+
+<!-- ════ ANALYTICS ════ -->
+<div class="screen" id="s-analytics">
+  <button class="back" onclick="goScreen('s-home')">← Home</button>
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:.5rem">
+    <div>
+      <div class="h2" style="margin-bottom:.3rem">Analytics <em>Dashboard</em></div>
+      <p class="sub" style="margin-bottom:0">Response data from all student sessions.</p>
+    </div>
+    <div>
+      <input type="file" id="analytics-results-file" accept=".json" style="display:none" onchange="importStudentResultsFromAnalytics(this)"/>
+      <button class="btn btn-p btn-sm" onclick="document.getElementById('analytics-results-file').click()" style="white-space:nowrap">
+        📂 Import Student Results
+      </button>
+    </div>
+  </div>
+
+  <!-- Drop zone for drag-and-drop on the analytics screen -->
+  <div id="analytics-dropzone" style="border:2px dashed rgba(123,110,246,.25);border-radius:var(--r);padding:14px 18px;text-align:center;font-size:13px;color:var(--txt3);margin-bottom:1.25rem;cursor:pointer;transition:border-color .2s,background .2s" onclick="document.getElementById('analytics-results-file').click()">
+    🎓 Drag &amp; drop a student results <code style="font-size:11px;background:var(--surf2);padding:1px 6px;border-radius:4px">brainspark-results-*.json</code> file here, or click to browse
+  </div>
+
+  <div class="analytics-grid" id="analytics-summary"></div>
+  <div class="chart-wrap">
+    <div class="chart-title">Score Distribution (Quiz avg %)</div>
+    <canvas id="chart-scores" height="120"></canvas>
+  </div>
+  <div class="chart-wrap">
+    <div class="chart-title">Completions per Module</div>
+    <canvas id="chart-completions" height="120"></canvas>
+  </div>
+  <div class="chart-wrap">
+    <div class="chart-title">Avg Completion Time per Module (seconds)</div>
+    <canvas id="chart-times" height="120"></canvas>
+  </div>
+  <div class="chart-wrap">
+    <div class="section-row" style="margin-bottom:.75rem">
+      <div class="chart-title" style="margin:0">All Responses</div>
+      <span id="analytics-sync-status" style="font-size:12px;color:var(--txt3);margin-right:8px"></span><button class="btn btn-d btn-sm" onclick="clearAnalytics()">Clear data</button>
+    </div>
+    <div class="resp-table-wrap"><table class="resp-table" id="resp-table"><thead><tr><th>Module</th><th>User</th><th>Student</th><th>Score</th><th>Finished</th><th>Time Taken</th><th>Date</th></tr></thead><tbody id="resp-tbody"></tbody></table></div>
+  </div>
+</div>
+
+<!-- ════ SYNC & EXPORT ════ -->
+<div class="screen" id="s-sync">
+  <button class="back" onclick="goScreen('s-home')">← Home</button>
+  <div class="h2" style="margin-bottom:.3rem">Sync <em>&amp; Export</em></div>
+  <p class="sub" style="margin-bottom:1.25rem">Offline-first — share modules manually across devices without internet.</p>
+
+  <div class="sync-box" style="border-color:rgba(123,110,246,.3)">
+    <h4>🎓 Export for Students (Field Mode)</h4>
+    <p>Generate a <strong>brainspark-modules.json</strong> for students to import into <strong>student.html</strong>. No internet or server needed — works fully offline.</p>
+    <div class="sync-methods">
+      <button class="btn btn-p btn-sm" onclick="exportForStudents()">📦 Export Modules for Students</button>
+    </div>
+  </div>
+
+  <div class="sync-box" style="border-color:rgba(62,207,142,.25)">
+    <h4>📥 Import Student Results</h4>
+    <p>Students export a results file from <strong>student.html</strong> and send it back to you. Import it here to see their scores on your dashboard.</p>
+    <div class="sync-methods">
+      <input type="file" id="student-results-file" accept=".json" style="display:none" onchange="importStudentResults(this)"/>
+      <button class="btn btn-green btn-sm" onclick="document.getElementById('student-results-file').click()">📂 Import Student Results</button>
+    </div>
+  </div>
+
+  <div class="sync-box">
+    <h4>📥 Import Modules</h4>
+    <p>Import a .json file from another device to receive their updated modules. You choose what gets added.</p>
+    <div class="sync-methods">
+      <input type="file" id="sync-import-file" accept=".json" style="display:none" onchange="importModules(this)"/>
+      <button class="btn btn-p btn-sm" onclick="document.getElementById('sync-import-file').click()">📂 Import from file</button>
+    </div>
+    <div id="sync-import-preview" style="display:none;margin-top:1rem"></div>
+  </div>
+
+  <div class="sync-box">
+    <h4>📊 Export Analytics</h4>
+    <p>Download response/analytics data as a CSV file for use in spreadsheets or reports.</p>
+    <button class="btn btn-g btn-sm" onclick="exportAnalyticsCSV()">⬇ Export analytics CSV</button>
+  </div>
+
+  <div style="background:var(--surf2);border:.5px solid var(--bdr);border-radius:var(--rs);padding:10px 14px;font-size:13px;color:var(--txt2)">
+    💡 <strong>Offline-first:</strong> All modules are stored locally on this device. No internet needed to create, play, or export. Sync only when you choose to.
+  </div>
+</div>
+
+</div><!-- .wrap -->
+
+<!-- ════ MODAL: LESSON PAGE EDITOR ════ -->
+<div class="overlay" id="m-lesson">
+  <div class="modal" style="max-width:620px">
+    <div class="modal-head"><div class="modal-title" id="ml-title">Edit Lesson Page</div><button class="modal-x" onclick="closeModal('m-lesson')">×</button></div>
+    <div class="field"><label class="lbl">Page title</label><input class="inp" id="ml-ptitle" placeholder="e.g. What is Photosynthesis?"/></div>
+    <div class="field">
+      <label class="lbl">Content <span style="font-size:10px;color:var(--txt3);text-transform:none;letter-spacing:0">(text, links, embedded media)</span></label>
+      <div class="rtb" id="lesson-rtb">
+        <button class="rtb-btn" onclick="rtbCmd('bold')" title="Bold"><strong>B</strong></button>
+        <button class="rtb-btn" onclick="rtbCmd('italic')" title="Italic"><em>I</em></button>
+        <button class="rtb-btn" onclick="rtbCmd('underline')" title="Underline"><u>U</u></button>
+        <div class="rtb-sep"></div>
+        <button class="rtb-btn" onclick="rtbCmd('justifyLeft')" title="Left">⬅</button>
+        <button class="rtb-btn" onclick="rtbCmd('justifyCenter')" title="Center">☰</button>
+        <button class="rtb-btn" onclick="rtbCmd('justifyRight')" title="Right">➡</button>
+        <div class="rtb-sep"></div>
+        <button class="rtb-btn" onclick="rtbInsertLink()" title="Link">🔗</button>
+        <button class="rtb-btn" onclick="rtbInsertImg()" title="Image">🖼</button>
+        <button class="rtb-btn" onclick="rtbInsertVideo()" title="Video">🎥</button>
+        <button class="rtb-btn" onclick="rtbInsertAudio()" title="Audio">🎵</button>
+        <button class="rtb-btn" onclick="rtbInsertIframe()" title="Embed">📎</button>
+        <button class="rtb-btn" onclick="rtbInsertBtn()" title="Button">🔘</button>
+        <button class="rtb-btn" onclick="openChartBuilder()" title="Insert Graph">📈</button>
+        <div class="rtb-sep"></div>
+        <select style="background:var(--surf3);border:.5px solid var(--bdr2);border-radius:4px;color:var(--txt);font-size:12px;padding:3px 5px;outline:none" onchange="rtbFontSize(this.value);this.value=''">
+          <option value="">Size</option>
+          <option value="1">Small</option><option value="3">Normal</option><option value="5">Large</option><option value="7">XL</option>
+        </select>
+        <input type="color" value="#eeeef5" title="Text color" style="width:24px;height:24px;border-radius:4px;border:.5px solid var(--bdr2);padding:0;cursor:pointer;background:none" onchange="rtbColor(this.value)"/>
+      </div>
+      <div class="rich-editor" id="ml-content" contenteditable="true" spellcheck="true" placeholder="Write your lesson content here. Use the toolbar to format, add links, images, or media…"></div>
+    </div>
+    <div class="brow right" style="margin-top:1rem">
+      <button class="btn btn-g" onclick="closeModal('m-lesson')">Cancel</button>
+      <button class="btn btn-p" onclick="saveLessonPage()">Save page</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════ MODAL: QUESTION PAGE EDITOR ════ -->
+<div class="overlay" id="m-question">
+  <div class="modal">
+    <div class="modal-head"><div class="modal-title" id="mq-title">Edit Question Page</div><button class="modal-x" onclick="closeModal('m-question')">×</button></div>
+    <div class="field">
+      <label class="lbl">Question type</label>
+      <select class="inp" id="mq-type" onchange="toggleQType()">
+        <option value="mcq">Multiple Choice</option>
+        <option value="fitb">Fill in the Blank</option>
+        <option value="truefalse">True / False</option>
+      </select>
+    </div>
+    <div class="field"><label class="lbl">Question text</label><textarea class="inp" id="mq-text" rows="3" placeholder="Type your question…"></textarea></div>
+    <div class="field"><label class="lbl">Image URL (optional)</label><input class="inp" id="mq-img" type="url" placeholder="https://…"/><img id="mq-img-prev" style="display:none;margin-top:8px;border-radius:6px;max-height:140px;width:100%;object-fit:contain" src="" alt=""/></div>
+    <div class="field" id="mq-opts-wrap">
+      <label class="lbl">Options <span style="color:var(--txt2);font-size:11px;text-transform:none;letter-spacing:0">(select the correct one)</span></label>
+      <div id="mq-opts"></div>
+      <button class="btn btn-g btn-sm" style="margin-top:8px" id="mq-add-opt" onclick="addOptRow()">+ Option</button>
+    </div>
+    <div class="field" id="mq-fitb-ans-wrap" style="display:none">
+      <label class="lbl">Correct answer(s) <span style="color:var(--txt2);font-size:11px;text-transform:none;letter-spacing:0">(separate with |)</span></label>
+      <input class="inp" id="mq-fitb-ans" placeholder="e.g. Paris | paris"/>
+    </div>
+    <div class="field"><label class="lbl">Explanation (optional)</label><textarea class="inp" id="mq-exp" rows="2" placeholder="Shown after the answer…"></textarea></div>
+    <div class="brow right" style="margin-top:1.25rem">
+      <button class="btn btn-g" onclick="closeModal('m-question')">Cancel</button>
+      <button class="btn btn-p" onclick="saveQuestionPage()">Save page</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════ MODAL: EXPORT SELECT ════ -->
+<div class="overlay" id="m-export-select">
+  <div class="modal">
+    <div class="modal-head"><div class="modal-title">Export a Module</div><button class="modal-x" onclick="closeModal('m-export-select')">×</button></div>
+    <p style="font-size:13.5px;color:var(--txt2);margin-bottom:1rem">Select which module to export:</p>
+    <div id="export-mod-list" style="display:grid;gap:6px;max-height:300px;overflow-y:auto;"></div>
+  </div>
+</div>
+
+<!-- ════ MODAL: IMPORT CONFIRM ════ -->
+<div class="overlay" id="m-import-confirm">
+  <div class="modal">
+    <div class="modal-head"><div class="modal-title">Confirm Import</div><button class="modal-x" onclick="closeModal('m-import-confirm')">×</button></div>
+    <p style="font-size:13.5px;color:var(--txt2);margin-bottom:1rem" id="import-confirm-msg"></p>
+    <div id="import-confirm-list" style="display:grid;gap:6px;max-height:250px;overflow-y:auto;margin-bottom:1rem"></div>
+    <div class="brow right">
+      <button class="btn btn-g" onclick="closeModal('m-import-confirm')">Cancel</button>
+      <button class="btn btn-p" onclick="doImportModules()">Import selected</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════ MODAL: STUDENT NAME ════ -->
+
+
+<!-- ════ MODAL: ACCOUNT ════ -->
+<div class="overlay" id="m-account">
+  <div class="modal">
+    <div class="modal-head"><div class="modal-title">Account Settings</div><button class="modal-x" onclick="closeModal('m-account')">×</button></div>
+    <div class="field"><label class="lbl">Display Name</label><input class="inp" id="acc-name" placeholder="Your display name"/></div>
+    <div class="divider"></div>
+    <div class="section-title" style="margin-bottom:.75rem">Change Password</div>
+    <div class="field"><label class="lbl">Current password</label><input class="inp" id="acc-cur-pass" type="password"/></div>
+    <div class="field"><label class="lbl">New password</label><input class="inp" id="acc-new-pass" type="password" placeholder="Min 6 characters"/></div>
+    <div class="field"><label class="lbl">Confirm new password</label><input class="inp" id="acc-new-pass2" type="password"/></div>
+    <p id="acc-err" style="color:var(--red);font-size:13px;margin-bottom:.75rem;display:none"></p>
+    <p id="acc-ok" style="color:var(--green);font-size:13px;margin-bottom:.75rem;display:none">Saved!</p>
+    <div class="brow right"><button class="btn btn-g" onclick="closeModal('m-account')">Cancel</button><button class="btn btn-p" onclick="saveAccountSettings()">Save</button></div>
+  </div>
+</div>
+
+<!-- ════ LOADING OVERLAY ════ -->
+<div id="loading-overlay" style="display:flex;position:fixed;inset:0;background:rgba(8,8,16,0.95);z-index:9998;align-items:center;justify-content:center;flex-direction:column;gap:14px">
+  <div style="width:40px;height:40px;border:3px solid rgba(123,110,246,0.3);border-top-color:#7b6ef6;border-radius:50%;animation:spin .8s linear infinite"></div>
+  <div id="loading-msg" style="font-family:'Syne',sans-serif;font-size:14px;color:rgba(238,238,245,0.6)">Loading…</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ══════════════════════════════════════════════════════
+   UTILS
+══════════════════════════════════════════════════════ */
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+function esc(s){ if(!s)return''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function simpleHash(s){ let h=0; for(let i=0;i<s.length;i++){h=((h<<5)-h)+s.charCodeAt(i);h|=0;} return h.toString(36); }
+
+function toast(msg,dur=2600){
+  const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('on');
+  setTimeout(()=>t.classList.remove('on'),dur);
+}
+function openModal(id){ document.getElementById(id).classList.add('open'); }
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+function goScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>{ s.classList.remove('active'); s.style.animation='none'; });
+  const el=document.getElementById(id); el.style.animation=''; el.classList.add('active');
+  window.scrollTo(0,0);
+}
+
+/* ══════════════════════════════════════════════════════
+   STATE
+══════════════════════════════════════════════════════ */
+let authors=[], modules=[], responses=[];
+let currentRole=null, currentAuthorId=null;
+let currentModuleId=null, sessionStart=null;
+let editingModuleId=null;
+let edPages=[]; // pages being edited [{type,title,html,qtype,qtext,qimg,options,answer,answers,exp}, ...]
+let editingPageIdx=null;
+let mpPageIdx=0, mpScore=0, mpQTotal=0, mpQAnswered={};
+let _pendingResult=null;
+let _importPending=[];
+
+/* ══════════════════════════════════════════════════════
+   PERSISTENCE
+══════════════════════════════════════════════════════ */
+function loadAll(){
+  authors   = safeJSON('bs_authors', []);
+  modules   = safeJSON('bs_modules', []);
+  responses = safeJSON('bs_responses', []);
+}
+function safeJSON(key, def){ try{ const v=localStorage.getItem(key); return v?JSON.parse(v):def; }catch(e){ return def; } }
+function saveAuthors(){ localStorage.setItem('bs_authors', JSON.stringify(authors)); }
+function saveModules(){ localStorage.setItem('bs_modules', JSON.stringify(modules)); }
+function saveResponses(){ localStorage.setItem('bs_responses', JSON.stringify(responses)); }
+function getMod(id){ return modules.find(m=>m.id===id); }
+function getAuthorByUsername(u){ return authors.find(a=>a.username.toLowerCase()===u.toLowerCase()); }
+function getAuthorById(id){ return authors.find(a=>a.id===id); }
+
+/* ══════════════════════════════════════════════════════
+   SEED
+══════════════════════════════════════════════════════ */
+function seedDefaultData(){
+  if(!authors.length){
+    authors=[{id:'admin1',username:'admin',passwordHash:simpleHash('brainspark2025'),displayName:'Admin'}];
+    saveAuthors();
+  }
+  if(!modules.length){
+    modules=[{
+      id:uid(), type:'unified', title:'Science Basics',
+      desc:'An interactive guided lesson on science fundamentals.',
+      authorId:'admin1',
+      pages:[
+        {id:uid(),type:'lesson',title:'What is the Solar System?',
+         html:'<p>Our <strong>Solar System</strong> consists of the Sun and the objects that orbit it, including eight planets, dwarf planets, moons, asteroids, and comets.</p><p>The eight planets in order from the Sun are: <strong>Mercury, Venus, Earth, Mars, Jupiter, Saturn, Uranus, and Neptune.</strong></p><p>🌍 Earth is the third planet from the Sun and the only known planet to harbor life.</p>'},
+        {id:uid(),type:'question',title:'',
+         qtype:'mcq',qtext:'Which planet is known as the Red Planet?',qimg:'',
+         options:['Venus','Mars','Jupiter','Saturn'],answer:1,
+         exp:'Mars appears red due to iron oxide (rust) on its surface.'},
+        {id:uid(),type:'lesson',title:'Photosynthesis',
+         html:'<p><strong>Photosynthesis</strong> is the process by which plants convert sunlight, water, and carbon dioxide into glucose and oxygen.</p><p>The formula is:<br/><code>6CO₂ + 6H₂O + light → C₆H₁₂O₆ + 6O₂</code></p><p>This process happens in <strong>chloroplasts</strong>, the green organelles in plant cells.</p>'},
+        {id:uid(),type:'question',title:'',
+         qtype:'fitb',qtext:'What gas do plants absorb during photosynthesis?',qimg:'',
+         answers:['carbon dioxide','CO2','co2'],
+         exp:'Plants absorb CO₂ and release oxygen as a byproduct.'},
+        {id:uid(),type:'question',title:'',
+         qtype:'truefalse',qtext:'The Sun is a planet.',qimg:'',answer:1,
+         exp:'The Sun is a star, not a planet. It is the center of our solar system.'},
+      ]
+    }];
+    saveModules();
+  }
+}
+
+/* ══════════════════════════════════════════════════════
+   AUTH
+══════════════════════════════════════════════════════ */
+document.addEventListener('DOMContentLoaded',()=>{
+  document.getElementById('li-pass').addEventListener('keydown',e=>{ if(e.key==='Enter') doLogin(); });
+  document.getElementById('li-user').addEventListener('keydown',e=>{ if(e.key==='Enter') document.getElementById('li-pass').focus(); });
+  document.querySelectorAll('.overlay').forEach(o=>{ o.addEventListener('click',e=>{ if(e.target===o) o.classList.remove('open'); }); });
+});
+
+function switchLoginTab(tab){
+  document.getElementById('login-signin-form').style.display=tab==='signin'?'block':'none';
+  document.getElementById('login-register-form').style.display=tab==='register'?'block':'none';
+  document.getElementById('tab-signin').classList.toggle('active',tab==='signin');
+  document.getElementById('tab-register').classList.toggle('active',tab==='register');
+}
+function doRegister(){
+  const u=document.getElementById('reg-user').value.trim();
+  const p=document.getElementById('reg-pass').value;
+  const p2=document.getElementById('reg-pass2').value;
+  const err=document.getElementById('reg-err');
+  if(!u){err.textContent='Enter a username';err.style.display='block';return;}
+  if(u.length<3){err.textContent='Username must be ≥3 characters';err.style.display='block';return;}
+  if(p.length<6){err.textContent='Password must be ≥6 characters';err.style.display='block';return;}
+  if(p!==p2){err.textContent='Passwords do not match';err.style.display='block';return;}
+  if(getAuthorByUsername(u)){err.textContent='Username already taken';err.style.display='block';return;}
+  authors.push({id:uid(),username:u,passwordHash:simpleHash(p),displayName:u}); saveAuthors();
+  err.style.display='none'; toast('Account created! You can sign in now.');
+  switchLoginTab('signin'); document.getElementById('li-user').value=u;
+}
+function doLogin(){
+  const u=document.getElementById('li-user').value.trim();
+  const p=document.getElementById('li-pass').value;
+  const author=getAuthorByUsername(u);
+  if(author && author.passwordHash===simpleHash(p)){
+    currentRole='author'; currentAuthorId=author.id;
+    document.getElementById('li-err').style.display='none';
+    setupNav(); goScreen('s-home');
+  } else {
+    document.getElementById('li-err').style.display='block';
+  }
+}
+function loginUser(){
+  currentRole='user'; currentAuthorId=null;
+  setupNav(); renderUserPlayList(); goScreen('s-home-user');
+}
+function logout(){
+  currentRole=null; currentAuthorId=null;
+  document.getElementById('li-user').value='';
+  document.getElementById('li-pass').value='';
+  document.getElementById('topnav').style.display='none';
+  document.getElementById('nav-account').style.display='none';
+  goScreen('s-login');
+}
+function setupNav(){
+  const nav=document.getElementById('topnav'); nav.style.display='flex';
+  const badge=document.getElementById('nav-role-badge');
+  if(currentRole==='author'){
+    const a=getAuthorById(currentAuthorId);
+    badge.textContent=(a?a.displayName:'Author')+' (Author)'; badge.className='nav-badge author';
+    document.getElementById('nav-account').style.display='inline-flex';
+  } else {
+    badge.textContent='Student'; badge.className='nav-badge user';
+    document.getElementById('nav-account').style.display='none';
+  }
+}
+
+/* ══════════════════════════════════════════════════════
+   ACCOUNT SETTINGS
+══════════════════════════════════════════════════════ */
+function openAccountSettings(){
+  const a=getAuthorById(currentAuthorId); if(!a) return;
+  document.getElementById('acc-name').value=a.displayName||a.username;
+  ['acc-cur-pass','acc-new-pass','acc-new-pass2'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('acc-err').style.display='none';
+  document.getElementById('acc-ok').style.display='none';
+  openModal('m-account');
+}
+function saveAccountSettings(){
+  const a=getAuthorById(currentAuthorId); if(!a) return;
+  const err=document.getElementById('acc-err'), ok=document.getElementById('acc-ok');
+  err.style.display='none'; ok.style.display='none';
+  const newName=document.getElementById('acc-name').value.trim();
+  if(!newName){err.textContent='Name cannot be empty';err.style.display='block';return;}
+  const curPass=document.getElementById('acc-cur-pass').value;
+  const newPass=document.getElementById('acc-new-pass').value;
+  const newPass2=document.getElementById('acc-new-pass2').value;
+  if(curPass||newPass||newPass2){
+    if(a.passwordHash!==simpleHash(curPass)){err.textContent='Current password incorrect';err.style.display='block';return;}
+    if(newPass.length<6){err.textContent='New password must be ≥6 characters';err.style.display='block';return;}
+    if(newPass!==newPass2){err.textContent='Passwords do not match';err.style.display='block';return;}
+    a.passwordHash=simpleHash(newPass);
+  }
+  a.displayName=newName; saveAuthors(); setupNav();
+  ok.style.display='block'; toast('Account updated!');
+}
+
+/* ══════════════════════════════════════════════════════
+   MODULE LIST RENDERING
+══════════════════════════════════════════════════════ */
+function renderAuthorList(){
+  const list=document.getElementById('author-list'), empty=document.getElementById('author-empty');
+  list.innerHTML='';
+  if(!modules.length){empty.style.display='block';return;} empty.style.display='none';
+  modules.forEach(m=>{
+    const isOwner=!m.authorId||m.authorId===currentAuthorId;
+    const ownerA=m.authorId?getAuthorById(m.authorId):null;
+    const pages=(m.pages||[]).length;
+    const qCount=(m.pages||[]).filter(p=>p.type==='question').length;
+    const respCount=responses.filter(r=>r.moduleId===m.id).length;
+    const div=document.createElement('div'); div.className='mod-item';
+    if(!isOwner) div.style.opacity='0.7';
+    div.innerHTML=`<div class="mi-icon unified">🎓</div>
+      <div class="mi-body">
+        <div class="mi-title">${esc(m.title||'Untitled')}${!isOwner?` <span style="font-size:11px;color:var(--txt3)">(by ${esc(ownerA?ownerA.displayName:'unknown')})</span>`:''}</div>
+        <div class="mi-meta">
+          <span class="pill pill-g">Interactive</span>
+          <span>${pages} pages · ${qCount} questions</span>
+          ${respCount?`<span>${respCount} responses</span>`:''}
+          ${!isOwner?'<span class="pill pill-r" style="font-size:10px">Read only</span>':''}
+        </div>
+      </div>
+      <div class="mi-actions">
+        ${isOwner?`<button class="btn btn-g btn-xs" onclick="generateShareLink('${m.id}')">🔗</button><button class="btn btn-o btn-xs" onclick="editModule('${m.id}')">Edit</button><button class="btn btn-d btn-xs" onclick="deleteModule('${m.id}')">Del</button>`:'<span style="font-size:12px;color:var(--txt3)">🔒</span>'}
+      </div>`;
+    list.appendChild(div);
+  });
+}
+
+function renderPlayList(){
+  const list=document.getElementById('play-list'), empty=document.getElementById('play-empty');
+  list.innerHTML=''; if(!modules.length){empty.style.display='block';return;} empty.style.display='none';
+  modules.forEach(m=>{ list.appendChild(makePlayCard(m,true)); });
+}
+
+function renderUserPlayList(){
+  const list=document.getElementById('user-play-list'), empty=document.getElementById('user-play-empty');
+  list.innerHTML=''; if(!modules.length){empty.style.display='block';return;} empty.style.display='none';
+  modules.forEach(m=>{ list.appendChild(makePlayCard(m,false)); });
+}
+
+function filterMods(type,btn){
+  document.querySelectorAll('#s-home-user .tabs .tab').forEach(t=>t.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  renderUserPlayList();
+}
+
+function makePlayCard(m, isAuthor){
+  const pages=(m.pages||[]).length;
+  const qCount=(m.pages||[]).filter(p=>p.type==='question').length;
+  const div=document.createElement('div'); div.className='mod-item'; div.style.cursor='pointer';
+  const pdfBtn=isAuthor?`<button class="pdf-btn" style="padding:6px 10px;font-size:12px" onclick="event.stopPropagation();exportModulePDF('${m.id}')">⬇</button>`:'';
+  div.innerHTML=`<div class="mi-icon unified">🎓</div>
+    <div class="mi-body">
+      <div class="mi-title">${esc(m.title||'Untitled')}</div>
+      <div class="mi-meta"><span class="pill pill-g">Interactive</span><span>${pages} pages · ${qCount} questions</span>${m.desc?'<span>'+esc(m.desc)+'</span>':''}</div>
+    </div>
+    <div class="mi-actions">${pdfBtn}<button class="btn btn-p btn-sm" onclick="event.stopPropagation();startModule('${m.id}')">▶ Start</button><button class='btn btn-g btn-sm' onclick="event.stopPropagation();generateShareLink('${m.id}')">🔗 Share</button></div>`;
+  div.onclick=()=>startModule(m.id);
+  return div;
+}
+
+function deleteModule(id){
+  const m=getMod(id);
+  if(m&&m.authorId&&m.authorId!==currentAuthorId){toast('You can only delete your own modules');return;}
+  if(!confirm('Delete this module?')) return;
+  modules=modules.filter(x=>x.id!==id); saveModules(); renderAuthorList(); toast('Deleted');
+}
+
+/* ══════════════════════════════════════════════════════
+   EDITOR — unified page-by-page builder
+══════════════════════════════════════════════════════ */
+function openNewModule(){
+  editingModuleId=null; edPages=[];
+  document.getElementById('ed-title').value='';
+  document.getElementById('ed-desc').value='';
+  renderEditorPages(); goScreen('s-editor');
+}
+
+function editModule(id){
+  const m=getMod(id); if(!m) return;
+  if(m.authorId&&m.authorId!==currentAuthorId){toast('You can only edit your own modules');return;}
+  editingModuleId=id; edPages=JSON.parse(JSON.stringify(m.pages||[]));
+  document.getElementById('ed-title').value=m.title||'';
+  document.getElementById('ed-desc').value=m.desc||'';
+  renderEditorPages(); goScreen('s-editor');
+}
+
+function renderEditorPages(){
+  const wrap=document.getElementById('ued-pages');
+  const empty=document.getElementById('ued-empty');
+  const count=document.getElementById('ed-page-count');
+  wrap.innerHTML='';
+  count.textContent=edPages.length?`(${edPages.length} pages)`:'';
+  if(!edPages.length){empty.style.display='block';return;} empty.style.display='none';
+  edPages.forEach((p,i)=>{
+    const div=document.createElement('div'); div.className='ued-page';
+    const typeLabel=p.type==='lesson'?'📄 Lesson':'❓ Question';
+    const titlePreview=p.type==='lesson'?(p.title||'Untitled lesson'):('Q: '+esc((p.qtext||'').slice(0,60)+(p.qtext&&p.qtext.length>60?'…':'')));
+    div.innerHTML=`<div class="ued-page-num">${i+1}</div>
+      <div class="ued-page-body">
+        <div class="ued-page-type">${typeLabel}</div>
+        <div class="ued-page-title">${p.type==='lesson'?esc(p.title||'Untitled'):titlePreview}</div>
+      </div>
+      <div class="ued-actions">
+        <button class="btn btn-o btn-xs" onclick="openPageEditor(${i})">Edit</button>
+        ${i>0?`<button class="btn btn-g btn-xs" onclick="movePage(${i},-1)">↑</button>`:''}
+        ${i<edPages.length-1?`<button class="btn btn-g btn-xs" onclick="movePage(${i},1)">↓</button>`:''}
+        <button class="btn btn-d btn-xs" onclick="deletePage(${i})">×</button>
+      </div>`;
+    wrap.appendChild(div);
+  });
+}
+
+function addPage(type){
+  editingPageIdx=null;
+  if(type==='lesson'){
+    edPages.push({id:uid(),type:'lesson',title:'',html:''});
+    editingPageIdx=edPages.length-1;
+    openLessonModal();
+  } else {
+    edPages.push({id:uid(),type:'question',qtype:'mcq',qtext:'',qimg:'',options:['',''],answer:0,answers:[],exp:''});
+    editingPageIdx=edPages.length-1;
+    openQuestionModal();
+  }
+}
+
+function openPageEditor(idx){
+  editingPageIdx=idx;
+  const p=edPages[idx];
+  if(p.type==='lesson') openLessonModal();
+  else openQuestionModal();
+}
+
+function deletePage(idx){ if(confirm('Remove this page?')){ edPages.splice(idx,1); renderEditorPages(); } }
+function movePage(idx,dir){
+  const newIdx=idx+dir; if(newIdx<0||newIdx>=edPages.length) return;
+  [edPages[idx],edPages[newIdx]]=[edPages[newIdx],edPages[idx]];
+  renderEditorPages();
+}
+
+/* Lesson modal */
+function openLessonModal(){
+  const p=edPages[editingPageIdx];
+  document.getElementById('ml-title').textContent=editingPageIdx!==null&&p&&p.title?'Edit Lesson':'Add Lesson Page';
+  document.getElementById('ml-ptitle').value=p?p.title||'':'';
+  const editor=document.getElementById('ml-content');
+  editor.innerHTML=p?p.html||'':'';
+  openModal('m-lesson');
+  setTimeout(()=>editor.focus(),100);
+}
+function saveLessonPage(){
+  const title=document.getElementById('ml-ptitle').value.trim();
+  const html=document.getElementById('ml-content').innerHTML;
+  if(editingPageIdx===null) return;
+  const p=edPages[editingPageIdx];
+  p.title=title; p.html=html;
+  closeModal('m-lesson'); renderEditorPages(); toast('Page saved');
+}
+
+/* Question modal */
+function openQuestionModal(){
+  const p=edPages[editingPageIdx];
+  document.getElementById('mq-title').textContent='Edit Question Page';
+  document.getElementById('mq-type').value=p.qtype||'mcq';
+  document.getElementById('mq-text').value=p.qtext||'';
+  document.getElementById('mq-img').value=p.qimg||'';
+  document.getElementById('mq-img-prev').style.display=p.qimg?'block':'none';
+  if(p.qimg) document.getElementById('mq-img-prev').src=p.qimg;
+  document.getElementById('mq-exp').value=p.exp||'';
+  document.getElementById('mq-fitb-ans').value=p.answers?(p.answers.join(' | ')):'';
+  document.getElementById('mq-img').oninput=function(){
+    const pv=document.getElementById('mq-img-prev');
+    if(this.value){pv.src=this.value;pv.style.display='block';}else pv.style.display='none';
+  };
+  // Build options
+  const wrap=document.getElementById('mq-opts'); wrap.innerHTML='';
+  toggleQType();
+  if(p.qtype==='truefalse'){
+    // handled by toggleQType
+  } else if(p.qtype==='mcq'){
+    const opts=p.options&&p.options.length?p.options:['',''];
+    opts.forEach((o,i)=>addOptRow(o,i===(p.answer||0)));
+  }
+  openModal('m-question');
+}
+function toggleQType(){
+  const t=document.getElementById('mq-type').value;
+  document.getElementById('mq-opts-wrap').style.display=(t==='fitb')?'none':'block';
+  document.getElementById('mq-fitb-ans-wrap').style.display=(t==='fitb')?'block':'none';
+  document.getElementById('mq-add-opt').style.display=(t==='truefalse')?'none':'inline-flex';
+  if(t==='truefalse'){
+    const wrap=document.getElementById('mq-opts'); wrap.innerHTML='';
+    ['True','False'].forEach((lbl,i)=>{
+      const row=document.createElement('div'); row.style.cssText='display:flex;align-items:center;gap:8px;margin-bottom:7px';
+      const radio=document.createElement('input'); radio.type='radio'; radio.name='opt-correct'; radio.style.accentColor='var(--acc)';
+      const p=edPages[editingPageIdx];
+      if(p&&p.qtype==='truefalse') radio.checked=(p.answer===i);
+      else radio.checked=(i===0);
+      const span=document.createElement('span'); span.style.flex='1'; span.style.fontSize='14px'; span.textContent=lbl;
+      row.append(radio,span); wrap.appendChild(row);
+    });
+  }
+}
+function addOptRow(val='',correct=false){
+  const wrap=document.getElementById('mq-opts');
+  const row=document.createElement('div'); row.style.cssText='display:flex;align-items:center;gap:8px;margin-bottom:7px';
+  const radio=document.createElement('input'); radio.type='radio'; radio.name='opt-correct'; radio.style.accentColor='var(--acc)'; radio.checked=correct;
+  const inp=document.createElement('input'); inp.className='inp'; inp.value=val; inp.placeholder='Option text…'; inp.style.flex='1';
+  if(correct) inp.style.borderColor='var(--green)';
+  radio.onchange=()=>{ wrap.querySelectorAll('input.inp:not([type=radio])').forEach(i=>i.style.borderColor=''); inp.style.borderColor='var(--green)'; };
+  const del=document.createElement('button'); del.textContent='×'; del.className='btn btn-d btn-xs'; del.style.padding='5px 8px';
+  del.onclick=()=>{ if(wrap.children.length>2)row.remove(); else toast('Need ≥2 options'); };
+  row.append(radio,inp,del); wrap.appendChild(row);
+}
+function saveQuestionPage(){
+  const qtext=document.getElementById('mq-text').value.trim(); if(!qtext){toast('Enter question text');return;}
+  const qtype=document.getElementById('mq-type').value;
+  const qimg=document.getElementById('mq-img').value.trim();
+  const exp=document.getElementById('mq-exp').value.trim();
+  const p=edPages[editingPageIdx];
+  p.qtext=qtext; p.qtype=qtype; p.qimg=qimg; p.exp=exp;
+  if(qtype==='fitb'){
+    const ansRaw=document.getElementById('mq-fitb-ans').value.trim();
+    if(!ansRaw){toast('Enter the correct answer');return;}
+    p.answers=ansRaw.split('|').map(a=>a.trim()).filter(Boolean);
+  } else if(qtype==='truefalse'){
+    const radios=[...document.querySelectorAll('#mq-opts input[type=radio]')];
+    const ans=radios.findIndex(r=>r.checked); p.answer=ans<0?0:ans;
+    p.options=['True','False'];
+  } else {
+    const rows=[...document.getElementById('mq-opts').children];
+    const opts=rows.map(r=>r.querySelector('input.inp').value.trim());
+    if(opts.some(o=>!o)){toast('Fill all options');return;}
+    const radios=rows.map(r=>r.querySelector('input[type=radio]'));
+    const ans=radios.findIndex(r=>r.checked); if(ans<0){toast('Select the correct answer');return;}
+    p.options=opts; p.answer=ans;
+  }
+  closeModal('m-question'); renderEditorPages(); toast('Question saved');
+}
+
+function saveModule(){
+  const title=document.getElementById('ed-title').value.trim();
+  const desc=document.getElementById('ed-desc').value.trim();
+  if(!title){toast('Enter a title');return;}
+  if(!edPages.length){toast('Add at least one page');return;}
+  if(editingModuleId){
+    const m=getMod(editingModuleId);
+    if(m.authorId&&m.authorId!==currentAuthorId){toast('You can only edit your own modules');return;}
+    m.title=title; m.desc=desc; m.pages=JSON.parse(JSON.stringify(edPages));
+    saveModules(); toast('Module updated!');
+  } else {
+    const mod={id:uid(),type:'unified',title,desc,authorId:currentAuthorId,pages:JSON.parse(JSON.stringify(edPages))};
+    modules.push(mod); saveModules(); editingModuleId=mod.id; toast('Module saved!');
+  }
+  renderAuthorList(); goScreen('s-author');
+}
+
+/* ══════════════════════════════════════════════════════
+   RICH TEXT EDITOR TOOLBAR
+══════════════════════════════════════════════════════ */
+function rtbCmd(cmd){ document.getElementById('ml-content').focus(); document.execCommand(cmd,false,null); }
+function rtbFontSize(size){ if(!size) return; document.getElementById('ml-content').focus(); document.execCommand('fontSize',false,size); }
+function rtbColor(color){ document.getElementById('ml-content').focus(); document.execCommand('foreColor',false,color); }
+function rtbInsertLink(){
+  const url=prompt('Enter URL:'); if(!url) return;
+  const text=prompt('Link text:',url); if(!text) return;
+  document.getElementById('ml-content').focus();
+  document.execCommand('insertHTML',false,`<a href="${esc(url)}" target="_blank" rel="noopener">${esc(text)}</a>`);
+}
+function rtbInsertImg(){
+  const src=prompt('Image URL:'); if(!src) return;
+  document.getElementById('ml-content').focus();
+  document.execCommand('insertHTML',false,`<img src="${esc(src)}" alt="image" style="max-width:100%;border-radius:8px;margin:8px 0"/>`);
+}
+function rtbInsertVideo(){
+  const src=prompt('Video URL (YouTube embed or direct mp4):'); if(!src) return;
+  document.getElementById('ml-content').focus();
+  let html='';
+  if(src.includes('youtube.com')||src.includes('youtu.be')){
+    const vid=src.match(/(?:v=|youtu\.be\/)([^&?]+)/)?.[1]||'';
+    if(vid) html=`<iframe src="https://www.youtube.com/embed/${vid}" width="100%" height="280" frameborder="0" allowfullscreen style="border-radius:8px;margin:8px 0"></iframe>`;
+    else html=`<iframe src="${esc(src)}" width="100%" height="280" frameborder="0" allowfullscreen style="border-radius:8px;margin:8px 0"></iframe>`;
+  } else {
+    html=`<video controls src="${esc(src)}" style="width:100%;border-radius:8px;margin:8px 0"></video>`;
+  }
+  document.execCommand('insertHTML',false,html);
+}
+function rtbInsertAudio(){
+  const src=prompt('Audio URL (mp3, ogg, etc.):'); if(!src) return;
+  document.getElementById('ml-content').focus();
+  document.execCommand('insertHTML',false,`<audio controls src="${esc(src)}" style="width:100%;margin:8px 0"></audio>`);
+}
+function rtbInsertIframe(){
+  const src=prompt('Embed URL (Google Slides, Canva, etc.):'); if(!src) return;
+  document.getElementById('ml-content').focus();
+  document.execCommand('insertHTML',false,`<iframe src="${esc(src)}" width="100%" height="300" frameborder="0" style="border-radius:8px;margin:8px 0"></iframe>`);
+}
+function rtbInsertBtn(){
+  const label=prompt('Button label:'); if(!label) return;
+  const url=prompt('Button link URL:'); if(!url) return;
+  document.getElementById('ml-content').focus();
+  document.execCommand('insertHTML',false,`<a href="${esc(url)}" target="_blank" rel="noopener" class="activity-btn" style="display:inline-flex;align-items:center;gap:8px;background:rgba(123,110,246,.15);color:#a095ff;border:.5px solid rgba(123,110,246,.3);border-radius:8px;padding:10px 16px;font-size:13.5px;font-weight:500;text-decoration:none;margin:4px 0">🔗 ${esc(label)}</a>`);
+}
+
+/* ══════════════════════════════════════════════════════
+   MODULE PLAYER — unified interactive flow
+══════════════════════════════════════════════════════ */
+function startModule(id){
+  const m=getMod(id); if(!m) return;
+  currentModuleId=id; sessionStart=Date.now();
+  mpPageIdx=0; mpScore=0; mpQAnswered={};
+  // Count questions for scoring
+  mpQTotal=(m.pages||[]).filter(p=>p.type==='question').length;
+  // Setup back button
+  document.getElementById('mp-back-btn').onclick=()=>backFromModule();
+  document.getElementById('mp-pdf').style.display=currentRole==='author'?'inline-flex':'none';
+  goScreen('s-module-player');
+  renderModulePage();
+}
+
+function renderModulePage(){
+  const m=getMod(currentModuleId); if(!m) return;
+  const pages=m.pages||[];
+  const p=pages[mpPageIdx];
+  const total=pages.length;
+  // Progress
+  document.getElementById('mp-counter').textContent=`Page ${mpPageIdx+1} / ${total}`;
+  document.getElementById('mp-pfill').style.width=`${((mpPageIdx)/total)*100}%`;
+  // Prev/Next
+  document.getElementById('mp-prev-btn').disabled=mpPageIdx===0;
+  const nextBtn=document.getElementById('mp-next-btn');
+  const isLast=mpPageIdx===total-1;
+  nextBtn.textContent=isLast?'Finish ✓':'Next →';
+  nextBtn.style.display='inline-flex';
+  // If question page not yet answered, hide next
+  if(p&&p.type==='question'&&!mpQAnswered[mpPageIdx]){
+    nextBtn.style.display='none';
+  }
+  // Render content
+  const container=document.getElementById('mp-page-render');
+  container.innerHTML='';
+  if(!p){container.innerHTML='<p style="color:var(--txt2)">No content.</p>';return;}
+  if(p.type==='lesson') renderLessonPage(p,container);
+  else renderQuestionPage(p,mpPageIdx,container);
+}
+
+function renderLessonPage(p,container){
+  const div=document.createElement('div'); div.className='mp-page mp-lesson';
+  div.innerHTML=`<div class="mp-page-label">📄 Lesson</div>
+    ${p.title?`<div class="mp-page-title">${esc(p.title)}</div>`:''}
+    <div class="mp-lesson-body">${p.html||'<em style="color:var(--txt3)">No content.</em>'}</div>`;
+  container.appendChild(div);
+}
+
+function renderQuestionPage(p,idx,container){
+  const div=document.createElement('div'); div.className='mp-page mp-question';
+  const alreadyAnswered=mpQAnswered[idx];
+  const L=['A','B','C','D','E','F'];
+  let qHtml=`<div class="mp-page-label">❓ Question</div>`;
+  qHtml+=`<div class="mp-q-text">${esc(p.qtext||'')}</div>`;
+  if(p.qimg) qHtml+=`<img class="mp-q-img" src="${esc(p.qimg)}" alt=""/>`;
+  div.innerHTML=qHtml;
+
+  const ogrid=document.createElement('div'); ogrid.className='ogrid';
+
+  if(p.qtype==='fitb'){
+    if(alreadyAnswered){
+      const r=alreadyAnswered;
+      const fb=document.createElement('div');
+      fb.className='mp-fb '+(r.correct?'ok':'err');
+      fb.innerHTML=r.correct?`<strong>Correct!</strong> ${p.exp?esc(p.exp):''}`:
+        `<strong>Not quite.</strong> Answer: <strong>${esc((p.answers||[])[0]||'')}</strong>${p.exp?'. '+esc(p.exp):''}`;
+      fb.style.display='block';
+      div.appendChild(fb);
+    } else {
+      const inp=document.createElement('input'); inp.className='inp mp-fitb-inp'; inp.placeholder='Type your answer here…';
+      const sub=document.createElement('button'); sub.className='btn btn-p'; sub.textContent='Submit Answer';
+      sub.style.cssText='width:100%;justify-content:center;margin-top:4px;';
+      const check=()=>{
+        const val=inp.value.trim();
+        if(!val){toast('Type your answer first');return;}
+        const correct=(p.answers||[]).some(a=>a.toLowerCase()===val.toLowerCase());
+        if(correct) mpScore++;
+        mpQAnswered[idx]={correct,val};
+        // show feedback inline
+        const fb=document.createElement('div');
+        fb.className='mp-fb '+(correct?'ok':'err');
+        fb.innerHTML=correct?`<strong>Correct!</strong> ${p.exp?esc(p.exp):'Great job!'}`:
+          `<strong>Not quite.</strong> Answer: <strong>${esc((p.answers||[])[0]||'')}</strong>${p.exp?'. '+esc(p.exp):'.'}`;
+        fb.style.display='block';
+        inp.disabled=true; sub.disabled=true;
+        div.appendChild(fb);
+        document.getElementById('mp-next-btn').style.display='inline-flex';
+      };
+      inp.addEventListener('keydown',e=>{ if(e.key==='Enter') check(); });
+      sub.onclick=check;
+      div.appendChild(inp); div.appendChild(sub);
+    }
+  } else {
+    // MCQ / True-False
+    const opts=p.options||[];
+    opts.forEach((opt,i)=>{
+      const b=document.createElement('button'); b.className='obtn';
+      b.innerHTML=`<span class="oltr">${L[i]||i}</span><span>${esc(opt)}</span>`;
+      if(alreadyAnswered){
+        b.disabled=true;
+        if(i===p.answer) b.classList.add('correct');
+        else if(alreadyAnswered.chosen===i) b.classList.add('wrong');
+      } else {
+        b.onclick=()=>{
+          const correct=(i===p.answer);
+          if(correct) mpScore++;
+          mpQAnswered[idx]={correct,chosen:i};
+          // update UI
+          ogrid.querySelectorAll('.obtn').forEach(btn=>btn.disabled=true);
+          ogrid.querySelectorAll('.obtn')[p.answer].classList.add('correct');
+          if(!correct) b.classList.add('wrong');
+          const fb=document.createElement('div');
+          fb.className='mp-fb '+(correct?'ok':'err');
+          fb.innerHTML=correct?`<strong>Correct!</strong> ${p.exp?esc(p.exp):'Good job!'}`:
+            `<strong>Not quite.</strong> Answer: <strong>${esc(opts[p.answer])}</strong>${p.exp?'. '+esc(p.exp):'.'}`;
+          fb.style.display='block';
+          div.appendChild(fb);
+          document.getElementById('mp-next-btn').style.display='inline-flex';
+        };
+      }
+      ogrid.appendChild(b);
+    });
+    // Restore feedback if already answered
+    if(alreadyAnswered){
+      const fb=document.createElement('div');
+      fb.className='mp-fb '+(alreadyAnswered.correct?'ok':'err');
+      fb.innerHTML=alreadyAnswered.correct?`<strong>Correct!</strong> ${p.exp?esc(p.exp):''}`:
+        `<strong>Not quite.</strong> Answer: <strong>${esc(opts[p.answer]||'')}</strong>${p.exp?'. '+esc(p.exp):''}`;
+      fb.style.display='block';
+      div.appendChild(ogrid); div.appendChild(fb);
+      container.appendChild(div); return;
+    }
+  }
+
+  div.appendChild(ogrid);
+  container.appendChild(div);
+}
+
+function navModule(dir){
+  const m=getMod(currentModuleId); if(!m) return;
+  const pages=m.pages||[];
+  const newIdx=mpPageIdx+dir;
+  if(newIdx<0) return;
+  if(newIdx>=pages.length){
+    // Finish
+    finishModule(); return;
+  }
+  mpPageIdx=newIdx;
+  renderModulePage();
+  window.scrollTo(0,0);
+}
+
+function finishModule(){
+  const m=getMod(currentModuleId); if(!m) return;
+  const qTotal=mpQTotal;
+  if(qTotal>0){
+    recordResponse('unified',mpScore,qTotal,true);
+    showResult(mpScore,qTotal);
+  } else {
+    recordResponse('unified',null,null,true);
+    toast('Module complete! ✓',2500);
+    backFromModule();
+  }
+}
+
+function backFromModule(){
+  if(currentRole==='author'){goScreen('s-player');renderPlayList();}
+  else{goScreen('s-home-user');renderUserPlayList();}
+}
+
+/* ══════════════════════════════════════════════════════
+   RESULT SCREEN
+══════════════════════════════════════════════════════ */
+
+function showResult(score,total){
+  const pct=total?Math.round((score/total)*100):100;
+  document.getElementById('r-pct').textContent=pct+'%';
+  document.getElementById('r-sub').textContent=`${score} out of ${total} correct`;
+  document.getElementById('r-ok').textContent=score;
+  document.getElementById('r-bad').textContent=total-score;
+  document.getElementById('r-tot').textContent=total;
+  let bh=pct>=90?'<span class="pill pill-gold">⭐ Outstanding</span>':pct>=70?'<span class="pill pill-acc">👍 Good work</span>':'<span class="pill pill-r">💪 Keep going</span>';
+  document.getElementById('r-badge').innerHTML=bh;
+  document.getElementById('r-retry').onclick=()=>startModule(currentModuleId);
+  goScreen('s-result');
+}
+function backFromResult(){ backFromModule(); }
+
+/* ══════════════════════════════════════════════════════
+   ANALYTICS
+══════════════════════════════════════════════════════ */
+function recordResponse(type,score,total,finished){
+  const m=getMod(currentModuleId); if(!m) return;
+  const pct=total&&score!=null?Math.round((score/total)*100):null;
+  // Use stopwatch elapsed if available, else fall back to sessionStart
+  const duration=window._lastQuizDuration!=null?window._lastQuizDuration:(sessionStart?Math.round((Date.now()-sessionStart)/1000):null);
+  const studentName=window._forcedStudentName||null;
+  // Include authorId so server can filter by author without a join
+  const authorId=m.authorId||null;
+  const rec={id:uid(),moduleId:currentModuleId,moduleTitle:m.title,moduleType:type,role:currentRole,score,total,pct,Finished:finished,duration,studentName,authorId,timestamp:new Date().toISOString()};
+  responses.push(rec); saveResponses();
+  window._forcedStudentName=null;
+  _pushResponseToServer(rec);
+}
+function renderAnalytics(){
+  const sum=document.getElementById('analytics-summary');
+  const total=responses.length;
+  const finished=responses.filter(r=>r.Finished).length;
+  const qResps=responses.filter(r=>r.pct!=null);
+  const avgScore=qResps.length?Math.round(qResps.reduce((a,r)=>a+r.pct,0)/qResps.length):0;
+  const uniqueMods=[...new Set(responses.map(r=>r.moduleId))].length;
+  sum.innerHTML=`
+    <div class="stat-card"><div class="big">${total}</div><div class="lbl">Total sessions</div></div>
+    <div class="stat-card"><div class="big" style="color:var(--green)">${finished}</div><div class="lbl">Finished</div></div>
+    <div class="stat-card"><div class="big">${avgScore}%</div><div class="lbl">Avg score</div></div>
+    <div class="stat-card"><div class="big">${uniqueMods}</div><div class="lbl">Modules used</div></div>`;
+  drawScoreChart(); drawCompletionChart(); drawTable();
+}
+function drawScoreChart(){
+  const canvas=document.getElementById('chart-scores');
+  const ctx=canvas.getContext('2d');
+  canvas.width=canvas.offsetWidth||600; canvas.height=140;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  const byMod={};
+  responses.filter(r=>r.pct!=null).forEach(r=>{
+    if(!byMod[r.moduleTitle]){byMod[r.moduleTitle]={sum:0,cnt:0};}
+    byMod[r.moduleTitle].sum+=r.pct; byMod[r.moduleTitle].cnt++;
+  });
+  const labels=Object.keys(byMod);
+  const data=labels.map(l=>Math.round(byMod[l].sum/byMod[l].cnt));
+  if(!labels.length){ctx.fillStyle='rgba(238,238,245,0.2)';ctx.font='13px DM Sans';ctx.textAlign='center';ctx.fillText('No data yet',canvas.width/2,70);return;}
+  drawBarChart(ctx,canvas.width,canvas.height,labels,data,'#7b6ef6','%');
+}
+function drawCompletionChart(){
+  const canvas=document.getElementById('chart-completions');
+  const ctx=canvas.getContext('2d');
+  canvas.width=canvas.offsetWidth||600; canvas.height=140;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  const byMod={};
+  responses.forEach(r=>{
+    if(!byMod[r.moduleTitle]){byMod[r.moduleTitle]={fin:0,total:0};}
+    byMod[r.moduleTitle].total++; if(r.Finished) byMod[r.moduleTitle].fin++;
+  });
+  const labels=Object.keys(byMod);
+  const data=labels.map(l=>byMod[l].fin);
+  if(!labels.length){ctx.fillStyle='rgba(238,238,245,0.2)';ctx.font='13px DM Sans';ctx.textAlign='center';ctx.fillText('No data yet',canvas.width/2,70);return;}
+  drawBarChart(ctx,canvas.width,canvas.height,labels,data,'#3ecf8e','');
+}
+function drawBarChart(ctx,w,h,labels,data,color,suffix){
+  const pad={l:40,r:10,t:10,b:40};
+  const cw=w-pad.l-pad.r,ch=h-pad.t-pad.b;
+  const max=Math.max(...data,1);
+  const bw=Math.min(40,cw/labels.length-10);
+  ctx.fillStyle='rgba(238,238,245,0.04)'; ctx.fillRect(pad.l,pad.t,cw,ch);
+  for(let i=0;i<=4;i++){
+    const y=pad.t+ch*(1-i/4);
+    ctx.strokeStyle='rgba(238,238,245,0.06)'; ctx.lineWidth=.5; ctx.beginPath(); ctx.moveTo(pad.l,y); ctx.lineTo(pad.l+cw,y); ctx.stroke();
+    ctx.fillStyle='rgba(238,238,245,0.35)'; ctx.font='10px sans-serif'; ctx.textAlign='right'; ctx.fillText(Math.round(max*i/4)+suffix,pad.l-4,y+4);
+  }
+  labels.forEach((lbl,i)=>{
+    const x=pad.l+i*(cw/labels.length)+(cw/labels.length-bw)/2;
+    const barH=data[i]/max*ch; const y=pad.t+ch-barH;
+    ctx.fillStyle=color+'cc'; ctx.fillRect(x,y,bw,barH);
+    ctx.fillStyle=color; ctx.font='bold 10px sans-serif'; ctx.textAlign='center'; ctx.fillText(data[i]+suffix,x+bw/2,y-4);
+    const shortLbl=lbl.length>10?lbl.slice(0,9)+'…':lbl;
+    ctx.fillStyle='rgba(238,238,245,0.45)'; ctx.font='10px sans-serif'; ctx.textAlign='center';
+    ctx.save(); ctx.translate(x+bw/2,pad.t+ch+14); ctx.fillText(shortLbl,0,0); ctx.restore();
+  });
+}
+function drawTable(){
+  const tbody=document.getElementById('resp-tbody'); tbody.innerHTML='';
+  if(!responses.length){tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--txt2);padding:1.5rem">No responses yet</td></tr>';return;}
+  [...responses].reverse().forEach(r=>{
+    const tr=document.createElement('tr');
+    const dur=r.duration?Math.floor(r.duration/60)+'m '+r.duration%60+'s':'—';
+    const score=r.pct!=null?`${r.score}/${r.total} (${r.pct}%)`:'Viewed';
+    const fin=r.Finished?`<span class="pill pill-g" style="font-size:10.5px">Finished</span>`:`<span class="pill pill-r" style="font-size:10.5px">Incomplete</span>`;
+    const time=new Date(r.timestamp).toLocaleString();
+    const sname=r.studentName?`<strong>${esc(r.studentName)}</strong>`:'<span style="color:var(--txt3)">—</span>';
+    tr.innerHTML=`<td><strong>${esc(r.moduleTitle)}</strong></td><td>${r.role||'—'}</td><td>${sname}</td><td>${score}</td><td>${fin}</td><td style="color:var(--txt2);font-size:12px">${time} · ${dur}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+function clearAnalytics(){
+  if(!confirm('Clear all response data?')) return;
+  responses=[]; saveResponses();
+  window.renderAnalytics(); toast('Analytics cleared');
+}
+
+/* ══════════════════════════════════════════════════════
+   SYNC & EXPORT (OFFLINE-FIRST MANUAL SYNC)
+══════════════════════════════════════════════════════ */
+function exportModules(){
+  if(!modules.length){toast('No modules to export');return;}
+  const data={version:'bs2',exportedAt:new Date().toISOString(),modules};
+  downloadJSON(data,'brainspark_modules_all.json');
+  toast('Modules exported!');
+}
+
+function exportModuleSelect(){
+  if(!modules.length){toast('No modules to export');return;}
+  const list=document.getElementById('export-mod-list'); list.innerHTML='';
+  modules.forEach(m=>{
+    const btn=document.createElement('button'); btn.className='btn btn-g'; btn.style.cssText='width:100%;text-align:left;justify-content:flex-start;';
+    btn.textContent=m.title||'Untitled';
+    btn.onclick=()=>{
+      const data={version:'bs2',exportedAt:new Date().toISOString(),modules:[m]};
+      downloadJSON(data,'brainspark_'+((m.title||'module').replace(/[^a-z0-9]/gi,'_').toLowerCase())+'.json');
+      closeModal('m-export-select'); toast('Module exported!');
+    };
+    list.appendChild(btn);
+  });
+  openModal('m-export-select');
+}
+
+function downloadJSON(data, filename){
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download=filename; a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+
+function importModules(input){
+  const file=input.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      const data=JSON.parse(e.target.result);
+      const incoming=(data.modules||[]);
+      if(!incoming.length){toast('No modules found in file');return;}
+      _importPending=incoming;
+      // Show confirm UI
+      const msg=document.getElementById('import-confirm-msg');
+      msg.textContent=`Found ${incoming.length} module(s) to import. Select which to import:`;
+      const list=document.getElementById('import-confirm-list'); list.innerHTML='';
+      incoming.forEach((m,i)=>{
+        const row=document.createElement('div'); row.style.cssText='display:flex;align-items:center;gap:10px;background:var(--surf2);border:.5px solid var(--bdr);border-radius:var(--rs);padding:10px;';
+        const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=true; cb.id='imp-cb-'+i; cb.style.accentColor='var(--acc)';
+        const lbl=document.createElement('label'); lbl.htmlFor='imp-cb-'+i; lbl.style.cssText='flex:1;cursor:pointer;font-size:13.5px';
+        lbl.textContent=m.title||'Untitled';
+        row.append(cb,lbl); list.appendChild(row);
+      });
+      openModal('m-import-confirm');
+    } catch(err){ toast('Invalid file format'); }
+  };
+  reader.readAsText(file);
+  input.value=''; // reset so same file can be re-imported
+}
+
+function doImportModules(){
+  const checkboxes=[...document.querySelectorAll('#import-confirm-list input[type=checkbox]')];
+  let count=0;
+  _importPending.forEach((m,i)=>{
+    if(!checkboxes[i]||!checkboxes[i].checked) return;
+    // Check if module with same id already exists — update or add
+    const existing=modules.findIndex(x=>x.id===m.id);
+    if(existing>=0){ modules[existing]=m; }
+    else { modules.push({...m}); }
+    count++;
+  });
+  saveModules(); closeModal('m-import-confirm');
+  toast(`Imported ${count} module(s)!`);
+  renderAuthorList();
+}
+
+function exportAnalyticsCSV(){
+  if(!responses.length){toast('No data to export');return;}
+  const header=['Module','Type','Role','StudentName','Score','Total','Pct','Finished','Duration(s)','Timestamp'];
+  const rows=responses.map(r=>[
+    `"${(r.moduleTitle||'').replace(/"/g,'""')}"`,
+    r.moduleType||'',r.role||'',
+    `"${(r.studentName||'').replace(/"/g,'""')}"`,
+    r.score!=null?r.score:'',r.total!=null?r.total:'',
+    r.pct!=null?r.pct:'',r.Finished?'Yes':'No',
+    r.duration!=null?r.duration:'',r.timestamp||''
+  ].join(','));
+  const csv=[header.join(','),...rows].join('\n');
+  const blob=new Blob([csv],{type:'text/csv'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download='brainspark_analytics.csv'; a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+  toast('CSV exported!');
+}
+
+/* ══════════════════════════════════════════════════════
+   PDF EXPORT
+══════════════════════════════════════════════════════ */
+async function exportModulePDF(id){
+  if(!window.jspdf){toast('PDF library not loaded');return;}
+  const m=getMod(id); if(!m){toast('Module not found');return;}
+  toast('Generating PDF…',4000);
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  const pw=210,ph=297,ml=18,mr=18,mt=20,cw=pw-ml-mr; let y=mt;
+  function ap(){doc.addPage();y=mt;}
+  function cy(n=20){if(y+n>ph-15)ap();}
+  const C={acc:[123,110,246],txt:[30,30,40],m:[120,120,140],surf:[240,240,248],g:[62,207,142],r:[245,101,101],w:[255,255,255]};
+  function sf(c){doc.setFillColor(...c);}
+  function sd(c){doc.setDrawColor(...c);}
+  function st(c){doc.setTextColor(...c);}
+  // Header
+  sf(C.acc);doc.rect(0,0,pw,14,'F');
+  doc.setFont('helvetica','bold');doc.setFontSize(10);st(C.w);doc.text('BrainSpark Studio',ml,9.5);
+  doc.setFont('helvetica','normal');doc.setFontSize(9);doc.text('Interactive Module',pw-mr,9.5,{align:'right'});
+  y=22;
+  // Title
+  doc.setFont('helvetica','bold');doc.setFontSize(22);st(C.acc);
+  const tl=doc.splitTextToSize(m.title||'Untitled',cw);doc.text(tl,ml,y);y+=tl.length*9+2;
+  if(m.desc){doc.setFont('helvetica','italic');doc.setFontSize(11);st(C.m);const dl=doc.splitTextToSize(m.desc,cw);doc.text(dl,ml,y);y+=dl.length*6+4;}
+  sd(C.acc);doc.setLineWidth(.4);doc.line(ml,y,pw-mr,y);y+=8;
+  // Pages
+  let qNum=0;
+  (m.pages||[]).forEach((pg,pi)=>{
+    if(pg.type==='lesson'){
+      cy(20);
+      sf(C.surf);sd([210,208,240]);doc.setLineWidth(.3);doc.roundedRect(ml,y,cw,10,2,2,'FD');
+      doc.setFont('helvetica','bold');doc.setFontSize(11);st(C.acc);doc.text('📄 '+esc(pg.title||`Lesson ${pi+1}`).slice(0,50),ml+4,y+7);y+=14;
+      if(pg.html){
+        const txt=pg.html.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+        const lines=doc.splitTextToSize(txt,cw-8);
+        cy(lines.length*5+4);
+        doc.setFont('helvetica','normal');doc.setFontSize(10);st(C.txt);doc.text(lines,ml+4,y);y+=lines.length*5+8;
+      }
+    } else {
+      qNum++;
+      const qt=`Q${qNum}. ${pg.qtext||''}`;const ql=doc.splitTextToSize(qt,cw-8);
+      const opts=pg.options||[];
+      const bh=12+ql.length*6+opts.length*7+8;
+      cy(bh);
+      sf(C.surf);sd([210,208,240]);doc.setLineWidth(.3);doc.roundedRect(ml,y,cw,bh,2,2,'FD');
+      doc.setFont('helvetica','bold');doc.setFontSize(12);st(C.txt);doc.text(ql,ml+4,y+7);y+=7+ql.length*6+2;
+      if(pg.qtype==='fitb'){
+        cy(10);doc.setFont('helvetica','normal');doc.setFontSize(10.5);st(C.m);doc.text('Answer: '+(pg.answers||[]).join(' / '),ml+6,y);y+=8;
+      } else {
+        const L=['A','B','C','D','E','F'];
+        opts.forEach((opt,oi)=>{cy(8);const ia=oi===pg.answer;if(ia){sf(C.g);doc.rect(ml+4,y-4,cw-8,6.5,'F');}doc.setFont('helvetica',ia?'bold':'normal');doc.setFontSize(10.5);st(ia?C.w:C.txt);const ol=doc.splitTextToSize(`${L[oi]||oi}. ${opt}`,cw-14);doc.text(ol,ml+6,y);y+=ol.length*5.5;});
+      }
+      if(pg.exp){y+=2;cy(8);doc.setFont('helvetica','italic');doc.setFontSize(9.5);st(C.m);const el=doc.splitTextToSize('Explanation: '+pg.exp,cw-8);doc.text(el,ml+4,y);y+=el.length*5.5;}
+      y+=10;
+    }
+  });
+  const tp=doc.getNumberOfPages();
+  for(let i=1;i<=tp;i++){doc.setPage(i);doc.setFont('helvetica','normal');doc.setFontSize(8);st(C.m);doc.text('Generated by BrainSpark Studio',ml,ph-6);doc.text(`Page ${i} of ${tp}`,pw-mr,ph-6,{align:'right'});sd([200,200,220]);doc.setLineWidth(.3);doc.line(ml,ph-10,pw-mr,ph-10);}
+  const fn=(m.title||'module').replace(/[^a-z0-9]/gi,'_').toLowerCase();
+  doc.save(`${fn}.pdf`); toast('PDF downloaded!');
+}
+
+/* ══════════════════════════════════════════════════════
+   INIT
+══════════════════════════════════════════════════════ */
+(function init(){
+  loadAll();
+  seedDefaultData();
+  document.getElementById('loading-overlay').style.display='none';
+})();
+</script>
+
+<script>
+// ── Toolbar injection ──
+document.addEventListener('DOMContentLoaded', () => {
+  const toolbar = document.getElementById('lesson-rtb');
+  if (toolbar) {
+    toolbar.insertAdjacentHTML('beforeend', `
+      <button class="rtb-btn" onclick="rtbUploadFile()" title="Upload file">📁</button>
+      <button class="rtb-btn" onclick="rtbHighlight()" title="Highlight">🖍</button>
+      <button class="rtb-btn" onclick="insertTable()" title="Table">📊</button>
+      <button class="rtb-btn" onclick="insertDropdown()" title="Dropdown">⬇</button>
+    `);
+  }
+});
+
+// ── Media helpers ──
+function rtbUploadFile() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.onchange = e => {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const src = ev.target.result;
+      document.getElementById('ml-content').focus();
+      if (file.type.startsWith('image'))
+        document.execCommand('insertImage', false, src);
+      else if (file.type.startsWith('video'))
+        document.execCommand('insertHTML', false, `<video controls src="${src}" style="width:100%;border-radius:8px;margin:8px 0"></video>`);
+      else if (file.type.startsWith('audio'))
+        document.execCommand('insertHTML', false, `<audio controls src="${src}" style="width:100%;margin:8px 0"></audio>`);
+    };
+    reader.readAsDataURL(file);
+  };
+  input.click();
+}
+function rtbHighlight() { document.execCommand('hiliteColor', false, '#f5c24766'); }
+function insertTable() {
+  let t = "<table border='1' style='width:100%;border-collapse:collapse;margin:8px 0'>";
+  for (let i = 0; i < 2; i++) t += "<tr><td style='padding:6px 8px'>&nbsp;</td><td style='padding:6px 8px'>&nbsp;</td></tr>";
+  t += "</table>";
+  document.getElementById('ml-content').focus();
+  document.execCommand('insertHTML', false, t);
+}
+function insertDropdown() {
+  document.getElementById('ml-content').focus();
+  document.execCommand('insertHTML', false,
+    `<details style="margin:8px 0;background:rgba(123,110,246,.08);border:.5px solid rgba(123,110,246,.25);border-radius:8px;padding:10px 14px">
+      <summary style="cursor:pointer;font-weight:600;color:#a095ff">Show Answer</summary>
+      <p style="margin-top:8px">Answer goes here…</p>
+    </details>`);
+}
+</script>
+
+
+<!-- ADDED FEATURES SCRIPT -->
+<script>
+// ══════════════════════════════════════════════════
+//  STUDENT NAME PROMPT — shows when clicking Play,
+//  NOT on share-link auto-open
+// ══════════════════════════════════════════════════
+let _pendingModuleId = null;
+
+// Override Play button: show name prompt first
+const _baseStartModule = startModule;   // capture original
+startModule = function (id) {
+  // Always ask for name before starting (unless bypassed internally)
+  _pendingModuleId = id;
+  document.getElementById('student-name-required-inp').value = '';
+  openModal('m-student-name-required');
+};
+
+function submitRequiredStudentName() {
+  const val = document.getElementById('student-name-required-inp').value.trim();
+  if (!val) { toast('Please enter your name to continue', 2500); return; }
+  closeModal('m-student-name-required');
+  // Store name so analytics picks it up when module finishes
+  window._forcedStudentName = val;
+  _baseStartModule(_pendingModuleId);   // call original directly
+}
+
+// ══════════════════════════════════════════════════
+//  SHAREABLE LINK — embeds module data in URL hash
+//  Works even when recipient doesn't have the module
+//  in their localStorage (cross-device, no server needed)
+// ══════════════════════════════════════════════════
+// ══════════════════════════════════════════════════
+//  SHARE — publishes module to server, returns a
+//  real short web URL: http://host/m/:slug
+// ══════════════════════════════════════════════════
+async function generateShareLink(moduleId) {
+  const m = typeof getMod === 'function' ? getMod(moduleId) : null;
+  if (!m) { toast('Module not found', 2000); return; }
+
+  // Show modal immediately with a loading state
+  _showShareModal(m.title, null);
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    const res  = await fetch('/api/modules', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(m),
+      signal:  controller.signal,
+    });
+    clearTimeout(timeout);
+    if (!res.ok) throw new Error('Server error ' + res.status);
+    const { url } = await res.json();
+    // Update the modal with the real link
+    document.getElementById('share-url-inp').value = url;
+    document.getElementById('share-url-inp').disabled = false;
+    document.getElementById('share-copy-btn').disabled = false;
+    document.getElementById('share-status').textContent = '✅ Link ready — copy and share anywhere!';
+    document.getElementById('share-status').style.color = 'var(--green)';
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url)
+        .then(() => toast('🔗 Link copied to clipboard!', 3000))
+        .catch(() => {});
+    }
+  } catch(e) {
+    const msg = e.name === 'AbortError'
+      ? '⚠️ Server took too long. Is it running at localhost:3000?'
+      : '⚠️ Could not reach server. Is it running?';
+    document.getElementById('share-status').textContent = msg;
+    document.getElementById('share-status').style.color = 'var(--red)';
+  }
+}
+
+function _showShareModal(title, url) {
+  let ov = document.getElementById('m-share-link');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'm-share-link';
+    ov.className = 'overlay';
+    ov.innerHTML = `<div class="modal" style="max-width:500px">
+      <div class="modal-head">
+        <div class="modal-title">🔗 Share Module</div>
+        <button class="modal-x" onclick="document.getElementById('m-share-link').classList.remove('open')">×</button>
+      </div>
+      <p style="font-size:13px;color:var(--txt2);margin-bottom:1rem;line-height:1.6">
+        Anyone with this link goes straight into the module as a student — no login needed. Works on any device.
+      </p>
+      <div class="field">
+        <label class="lbl">Module</label>
+        <div id="share-mod-title" style="font-size:14px;font-weight:600;padding:4px 0;color:var(--txt)"></div>
+      </div>
+      <div class="field">
+        <label class="lbl">Shareable Link</label>
+        <div style="display:flex;gap:8px">
+          <input class="inp" id="share-url-inp" readonly disabled placeholder="Publishing…"
+            style="font-size:12px;color:var(--acc-lt);font-family:monospace"/>
+          <button class="btn btn-p btn-sm" id="share-copy-btn" disabled onclick="_copyShareUrl()">Copy</button>
+        </div>
+        <div id="share-status" style="font-size:12px;color:var(--txt3);margin-top:6px">⏳ Publishing module to server…</div>
+      </div>
+    </div>`;
+    ov.addEventListener('click', e => { if (e.target === ov) ov.classList.remove('open'); });
+    document.body.appendChild(ov);
+  } else {
+    // Reset state for reuse
+    document.getElementById('share-url-inp').value = '';
+    document.getElementById('share-url-inp').disabled = true;
+    document.getElementById('share-copy-btn').disabled = true;
+    document.getElementById('share-status').textContent = '⏳ Publishing module to server…';
+    document.getElementById('share-status').style.color = 'var(--txt3)';
+  }
+  document.getElementById('share-mod-title').textContent = title;
+  ov.classList.add('open');
+}
+
+function _copyShareUrl() {
+  const inp = document.getElementById('share-url-inp');
+  inp.select();
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(inp.value).then(() => toast('🔗 Copied!', 2500));
+  } else {
+    document.execCommand('copy');
+    toast('🔗 Copied!', 2500);
+  }
+}
+
+// ══════════════════════════════════════════════════
+//  URL AUTO-OPEN: /#play=:slug
+//  Server redirects /m/:slug → /#play=:slug
+//  App fetches the module from /api/modules/:slug,
+//  imports it, and launches the player.
+// ══════════════════════════════════════════════════
+window.addEventListener('load', async () => {
+  let slug = null;
+  const hash = location.hash;
+  if (hash.startsWith('#play=')) slug = hash.slice('#play='.length) || null;
+  const pathMatch = location.pathname.match(/^\/m\/([a-f0-9]{6,16})$/);
+  if (!slug && pathMatch) slug = pathMatch[1];
+  if (!slug) return;
+
+  history.replaceState(null, '', '/');
+
+  toast('⏳ Loading shared module…', 3000);
+
+  let sharedModule;
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    const res = await fetch('/api/modules/' + slug, { signal: controller.signal });
+    clearTimeout(timeout);
+    if (!res.ok) throw new Error('not found');
+    sharedModule = await res.json();
+  } catch(e) {
+    const local = (typeof modules !== 'undefined' ? modules : [])
+      .find(m => m.id === slug || m._slug === slug);
+    if (local) { sharedModule = local; }
+    else {
+      toast('⚠️ No internet and module not cached. Open this link once while online first.', 6000);
+      return;
+    }
+  }
+
+  if (!sharedModule || !sharedModule.id) {
+    toast('⚠️ Invalid module data from server.', 4000);
+    return;
+  }
+
+  sharedModule._slug = slug;
+  const existing = modules.findIndex(x => x.id === sharedModule.id);
+  if (existing >= 0) { modules[existing] = sharedModule; }
+  else { modules.push(sharedModule); }
+  saveModules();
+
+  // Auto-login as student and launch player
+  currentRole     = 'user';
+  currentAuthorId = null;
+  setupNav();
+  renderUserPlayList();
+
+  const launchId = sharedModule.id;
+  toast('✅ Module loaded!', 1500);
+  setTimeout(() => startModule(launchId), 200);
+});
+
+// ── Dropdown answer toggle ──
+document.addEventListener('click', e => {
+  if (e.target.classList.contains('dropdown-answer-btn')) {
+    const ans = e.target.nextElementSibling;
+    if (ans) ans.style.display = ans.style.display === 'none' ? 'block' : 'none';
+  }
+});
+
+// ══════════════════════════════════════════════════
+//  STOPWATCH SYSTEM
+// ══════════════════════════════════════════════════
+let _swInterval = null;
+let _swStart = null;
+let _swElapsed = 0; // total seconds elapsed
+
+function startStopwatch() {
+  _swStart = Date.now();
+  _swElapsed = 0;
+  const sw = document.getElementById('mp-stopwatch');
+  const dot = document.getElementById('sw-dot');
+  if (sw) sw.style.display = 'flex';
+  if (dot) dot.style.animation = 'sw-pulse 1s ease-in-out infinite';
+  clearInterval(_swInterval);
+  _swInterval = setInterval(() => {
+    _swElapsed = Math.floor((Date.now() - _swStart) / 1000);
+    updateSwDisplay(_swElapsed);
+  }, 1000);
+}
+
+function stopStopwatch() {
+  clearInterval(_swInterval);
+  _swInterval = null;
+  const dot = document.getElementById('sw-dot');
+  if (dot) dot.style.animation = 'none';
+  return _swElapsed;
+}
+
+function updateSwDisplay(secs) {
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  const disp = document.getElementById('sw-display');
+  if (disp) disp.textContent = m + ':' + String(s).padStart(2, '0');
+}
+
+function formatDuration(secs) {
+  if (!secs && secs !== 0) return '—';
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return m > 0 ? m + 'm ' + s + 's' : s + 's';
+}
+
+// Patch startModule to start stopwatch
+const _swBaseStart = startModule;
+startModule = function(id) {
+  _swBaseStart(id);
+  startStopwatch();
+};
+
+// Patch finishModule to stop stopwatch and show time on result
+const _swBaseFinish = finishModule;
+finishModule = function() {
+  const elapsed = stopStopwatch();
+  document.getElementById('mp-stopwatch').style.display = 'none';
+  // Store on window so showResult can use it
+  window._lastQuizDuration = elapsed;
+  _swBaseFinish();
+};
+
+// Also stop if user leaves mid-module via back button
+const _origBackFromModule = backFromModule;
+backFromModule = function() {
+  stopStopwatch();
+  const sw = document.getElementById('mp-stopwatch');
+  if (sw) sw.style.display = 'none';
+  _origBackFromModule();
+};
+
+// Patch showResult to display time
+const _swBaseShowResult = showResult;
+showResult = function(score, total) {
+  _swBaseShowResult(score, total);
+  const el = document.getElementById('r-time');
+  if (el && window._lastQuizDuration != null) {
+    el.textContent = formatDuration(window._lastQuizDuration);
+  }
+};
+
+// ══════════════════════════════════════════════════
+//  GRAPH / CHART BUILDER
+// ══════════════════════════════════════════════════
+let _cbChartType = 'bar';
+let _cbColor = 'purple';
+let _cbPreviewChart = null;
+let _cbSavedRange = null;
+
+const CB_COLORS = {
+  purple: ['#7b6ef6','#a095ff','#5a50c4','#9b8fff','#6a5fe0'],
+  green:  ['#3ecf8e','#6ee7b7','#2a9f6a','#5ddba0','#1e8a59'],
+  gold:   ['#f5c247','#ffd97a','#c99a20','#e8b530','#d4a028'],
+  red:    ['#f56565','#fc8181','#c53030','#e05252','#d94040'],
+  blue:   ['#60a5fa','#93c5fd','#2563eb','#4d8ef5','#3578e5'],
+  multi:  ['#7b6ef6','#3ecf8e','#f5c247','#f56565','#60a5fa','#f97316','#a855f7','#14b8a6']
+};
+
+function openChartBuilder() {
+  // Save caret position in rich editor
+  const sel = window.getSelection();
+  if (sel && sel.rangeCount > 0) _cbSavedRange = sel.getRangeAt(0).cloneRange();
+
+  _cbChartType = 'bar';
+  _cbColor = 'purple';
+  document.getElementById('cb-title').value = '';
+  // Reset type buttons
+  ['bar','line','pie','doughnut'].forEach(t => {
+    const b = document.getElementById('cbt-'+t);
+    if (b) b.classList.toggle('selected', t === 'bar');
+  });
+  // Reset color borders
+  document.querySelectorAll('#cb-colors div').forEach((d,i) => {
+    d.style.border = i===0 ? '2px solid #fff' : '2px solid transparent';
+  });
+  // Default data
+  const rows = document.getElementById('cb-data-rows');
+  rows.innerHTML = '';
+  [['Category A','40'],['Category B','65'],['Category C','30'],['Category D','80']].forEach(([l,v]) => addChartDataRow(l,v));
+  openModal('m-chart-builder');
+  setTimeout(previewChart, 100);
+}
+
+function selectChartType(type) {
+  _cbChartType = type;
+  ['bar','line','pie','doughnut'].forEach(t => {
+    const b = document.getElementById('cbt-'+t);
+    if (b) b.classList.toggle('selected', t === type);
+  });
+  previewChart();
+}
+
+function selectChartColor(color) {
+  _cbColor = color;
+  const colorMap = {purple:'#7b6ef6',green:'#3ecf8e',gold:'#f5c247',red:'#f56565',blue:'#60a5fa',multi:'conic-gradient(#7b6ef6 0%,#3ecf8e 25%,#f5c247 50%,#f56565 75%)'};
+  document.querySelectorAll('#cb-colors div').forEach(d => {
+    const bg = d.style.background;
+    const isSelected = d.getAttribute('title') && d.getAttribute('title').toLowerCase() === color;
+    d.style.border = isSelected ? '2px solid #fff' : '2px solid transparent';
+  });
+  // re-apply borders by title
+  document.querySelectorAll('#cb-colors div').forEach(d => {
+    d.style.border = (d.getAttribute('title') || '').toLowerCase() === color ? '2px solid #fff' : '2px solid transparent';
+  });
+  previewChart();
+}
+
+function addChartDataRow(label='', value='') {
+  const rows = document.getElementById('cb-data-rows');
+  const row = document.createElement('div');
+  row.className = 'chart-data-row';
+  const labelInp = document.createElement('input');
+  labelInp.className = 'inp';
+  labelInp.placeholder = 'Label';
+  labelInp.value = label;
+  labelInp.oninput = previewChart;
+  const valInp = document.createElement('input');
+  valInp.className = 'inp';
+  valInp.placeholder = '0';
+  valInp.type = 'number';
+  valInp.value = value;
+  valInp.oninput = previewChart;
+  const del = document.createElement('button');
+  del.className = 'btn btn-d btn-xs';
+  del.textContent = '×';
+  del.style.padding = '5px 8px';
+  del.onclick = () => { if (rows.children.length > 2) { row.remove(); previewChart(); } else { toast('Need at least 2 data points'); }};
+  row.append(labelInp, valInp, del);
+  rows.appendChild(row);
+  previewChart();
+}
+
+function getChartData() {
+  const rows = document.getElementById('cb-data-rows').children;
+  const labels = [], values = [];
+  [...rows].forEach(r => {
+    const inps = r.querySelectorAll('input');
+    const lbl = inps[0].value.trim() || 'Item';
+    const val = parseFloat(inps[1].value) || 0;
+    labels.push(lbl);
+    values.push(val);
+  });
+  return { labels, values };
+}
+
+function previewChart() {
+  const canvas = document.getElementById('cb-preview-canvas');
+  if (!canvas) return;
+  // Destroy old chart
+  if (_cbPreviewChart) { try { _cbPreviewChart.destroy(); } catch(e) {} _cbPreviewChart = null; }
+  const { labels, values } = getChartData();
+  const colors = CB_COLORS[_cbColor] || CB_COLORS.purple;
+  const title = document.getElementById('cb-title').value.trim();
+  const bgColors = labels.map((_, i) => colors[i % colors.length] + 'cc');
+  const borderColors = labels.map((_, i) => colors[i % colors.length]);
+  const datasets = [{
+    label: title || 'Data',
+    data: values,
+    backgroundColor: bgColors,
+    borderColor: borderColors,
+    borderWidth: 2,
+    fill: _cbChartType === 'line' ? false : undefined,
+    tension: 0.4,
+    pointRadius: _cbChartType === 'line' ? 4 : undefined,
+  }];
+  const cfg = {
+    type: _cbChartType,
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: ['pie','doughnut'].includes(_cbChartType), labels: { color:'rgba(238,238,245,0.7)', boxWidth:12, font:{size:11} }},
+        title: { display:!!title, text:title, color:'rgba(238,238,245,0.9)', font:{size:13,weight:'bold'} }
+      },
+      scales: ['bar','line'].includes(_cbChartType) ? {
+        x: { ticks:{ color:'rgba(238,238,245,0.5)',font:{size:10} }, grid:{ color:'rgba(255,255,255,0.05)' }},
+        y: { ticks:{ color:'rgba(238,238,245,0.5)',font:{size:10} }, grid:{ color:'rgba(255,255,255,0.05)' }, beginAtZero:true }
+      } : {}
+    }
+  };
+  canvas.width = canvas.parentElement ? canvas.parentElement.clientWidth - 20 : 400;
+  canvas.height = 150;
+  _cbPreviewChart = new (window.Chart)(canvas, cfg);
+}
+
+function insertChartIntoLesson() {
+  const { labels, values } = getChartData();
+  const title = document.getElementById('cb-title').value.trim();
+  const colors = CB_COLORS[_cbColor] || CB_COLORS.purple;
+  const chartId = 'bschart-' + Math.random().toString(36).slice(2,9);
+  const isPieLike = ['pie','doughnut'].includes(_cbChartType);
+
+  // Store all config in data-* attributes — no <script> injection needed
+  // (browsers strip scripts from execCommand insertHTML)
+  const chartCfg = JSON.stringify({
+    type: _cbChartType,
+    labels,
+    values,
+    colors: labels.map((_,i) => colors[i % colors.length]),
+    title,
+    isPieLike
+  });
+
+  const html =
+    `<div class="bs-chart-block" data-chart-cfg="${encodeURIComponent(chartCfg)}" ` +
+    `style="margin:16px 0;background:rgba(255,255,255,0.03);border:.5px solid rgba(255,255,255,0.08);border-radius:10px;padding:14px;display:block;">` +
+    (title ? `<div style="font-size:13px;font-weight:600;color:rgba(238,238,245,0.85);margin-bottom:8px;text-align:center">${title}</div>` : '') +
+    `<canvas id="${chartId}" style="width:100%;max-height:240px;display:block;"></canvas>` +
+    `</div><p><br></p>`;
+
+  if (_cbPreviewChart) { try { _cbPreviewChart.destroy(); } catch(e) {} _cbPreviewChart = null; }
+  closeModal('m-chart-builder');
+
+  // Insert into the editor at the saved caret position
+  const editor = document.getElementById('ml-content');
+  editor.focus();
+  if (_cbSavedRange) {
+    try {
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(_cbSavedRange);
+    } catch(e) {}
+  }
+  document.execCommand('insertHTML', false, html);
+
+  // Render the chart immediately after insertion (DOM is ready now)
+  renderEditorCharts(editor);
+  toast('📈 Graph inserted!', 2000);
+}
+
+// Render all uninitialized bs-chart-block elements inside a container
+function renderEditorCharts(container) {
+  container.querySelectorAll('.bs-chart-block[data-chart-cfg]').forEach(block => {
+    const canvas = block.querySelector('canvas');
+    if (!canvas || !canvas.id) return;
+    // Skip if already rendered
+    if (window.Chart && Chart.getChart(canvas.id)) return;
+    let cfg;
+    try { cfg = JSON.parse(decodeURIComponent(block.dataset.chartCfg)); } catch(e) { return; }
+    const bgColors = cfg.colors.map(c => c + 'cc');
+    new window.Chart(canvas, {
+      type: cfg.type,
+      data: {
+        labels: cfg.labels,
+        datasets: [{
+          label: cfg.title || 'Data',
+          data: cfg.values,
+          backgroundColor: bgColors,
+          borderColor: cfg.colors,
+          borderWidth: 2,
+          fill: false,
+          tension: 0.4
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: cfg.isPieLike, labels: { color:'rgba(238,238,245,0.7)', boxWidth:12, font:{size:11} }},
+          title: { display: false }
+        },
+        scales: cfg.isPieLike ? {} : {
+          x: { ticks:{ color:'rgba(238,238,245,0.5)',font:{size:10} }, grid:{ color:'rgba(255,255,255,0.05)' }},
+          y: { beginAtZero:true, ticks:{ color:'rgba(238,238,245,0.5)',font:{size:10} }, grid:{ color:'rgba(255,255,255,0.05)' }}
+        }
+      }
+    });
+  });
+}
+
+// Also render charts when a lesson page is displayed to students
+const _origRenderLessonPage = renderLessonPage;
+renderLessonPage = function(p, container) {
+  _origRenderLessonPage(p, container);
+  // After the HTML is in the DOM, render any embedded charts
+  requestAnimationFrame(() => renderEditorCharts(container));
+};
+
+// ══════════════════════════════════════════════════
+//  ANALYTICS EXTENSIONS — avg time chart + table update
+// ══════════════════════════════════════════════════
+// Patch renderAnalytics to also add avg time card and draw time chart
+const _baseRenderAnalytics = renderAnalytics;
+renderAnalytics = function() {
+  _baseRenderAnalytics();
+  // Add avg time stat card
+  const withDur = responses.filter(r => r.duration && r.duration > 0);
+  const avgTime = withDur.length ? Math.round(withDur.reduce((a,r) => a + r.duration, 0) / withDur.length) : null;
+  const sum = document.getElementById('analytics-summary');
+  if (sum && avgTime !== null) {
+    const card = document.createElement('div');
+    card.className = 'stat-card';
+    card.innerHTML = `<div class="big" style="color:var(--gold)">${formatDuration(avgTime)}</div><div class="lbl">Avg time</div>`;
+    sum.appendChild(card);
+  }
+  drawTimeChart();
+};
+
+function drawTimeChart() {
+  const canvas = document.getElementById('chart-times');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  canvas.width = canvas.offsetWidth || 600;
+  canvas.height = 140;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const byMod = {};
+  responses.filter(r => r.duration && r.duration > 0).forEach(r => {
+    if (!byMod[r.moduleTitle]) byMod[r.moduleTitle] = { sum:0, cnt:0 };
+    byMod[r.moduleTitle].sum += r.duration;
+    byMod[r.moduleTitle].cnt++;
+  });
+  const labels = Object.keys(byMod);
+  const data = labels.map(l => Math.round(byMod[l].sum / byMod[l].cnt));
+  if (!labels.length) {
+    ctx.fillStyle = 'rgba(238,238,245,0.2)';
+    ctx.font = '13px DM Sans';
+    ctx.textAlign = 'center';
+    ctx.fillText('No timed sessions yet', canvas.width/2, 70);
+    return;
+  }
+  drawBarChart(ctx, canvas.width, canvas.height, labels, data, '#f5c247', 's');
+}
+
+// Patch drawTable to show time column properly
+const _baseDrawTable = drawTable;
+drawTable = function() {
+  const tbody = document.getElementById('resp-tbody');
+  tbody.innerHTML = '';
+  if (!responses.length) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--txt2);padding:1.5rem">No responses yet</td></tr>';
+    return;
+  }
+  [...responses].reverse().forEach(r => {
+    const tr = document.createElement('tr');
+    const timeTaken = r.duration != null ? formatDuration(r.duration) : '—';
+    const score = r.pct != null ? `${r.score}/${r.total} (${r.pct}%)` : 'Viewed';
+    const fin = r.Finished ? `<span class="pill pill-g" style="font-size:10.5px">Finished</span>` : `<span class="pill pill-r" style="font-size:10.5px">Incomplete</span>`;
+    const time = new Date(r.timestamp).toLocaleString();
+    const sname = r.studentName ? `<strong>${esc(r.studentName)}</strong>` : '<span style="color:var(--txt3)">—</span>';
+    tr.innerHTML = `<td><strong>${esc(r.moduleTitle)}</strong></td><td>${r.role||'—'}</td><td>${sname}</td><td>${score}</td><td>${fin}</td><td style="color:var(--gold);font-weight:500">${timeTaken}</td><td style="color:var(--txt2);font-size:12px">${time}</td>`;
+    tbody.appendChild(tr);
+  });
+};
+
+// ══════════════════════════════════════════════════════════════════
+//  SERVER SYNC + OFFLINE QUEUE
+// ══════════════════════════════════════════════════════════════════
+const _OQ_KEY = 'bs_offline_response_queue';
+function _loadOQ()  { try { return JSON.parse(localStorage.getItem(_OQ_KEY)||'[]'); } catch { return []; } }
+function _saveOQ(q) { localStorage.setItem(_OQ_KEY, JSON.stringify(q)); }
+
+async function _pushResponseToServer(rec) {
+  try {
+    const res = await fetch('/api/responses', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(rec),
+    });
+    if (res.ok) return;
+    throw new Error('server ' + res.status);
+  } catch {
+    const q = _loadOQ();
+    if (!q.some(r => r.id === rec.id)) { q.push(rec); _saveOQ(q); }
+  }
+}
+
+async function _flushOfflineQueue() {
+  const q = _loadOQ();
+  if (!q.length) return;
+  const remaining = [];
+  for (const rec of q) {
+    try {
+      const res = await fetch('/api/responses', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(rec),
+      });
+      if (!res.ok) remaining.push(rec);
+    } catch { remaining.push(rec); }
+  }
+  _saveOQ(remaining);
+  const sent = q.length - remaining.length;
+  if (sent > 0) toast('📡 Synced ' + sent + ' offline result' + (sent > 1 ? 's' : '') + ' to server', 3000);
+}
+
+window.addEventListener('online', () => setTimeout(_flushOfflineQueue, 1000));
+window.addEventListener('load',   () => { if (navigator.onLine) setTimeout(_flushOfflineQueue, 3000); });
+
+async function _pullServerResponses() {
+  if (!currentAuthorId) return false;
+  try {
+    const res = await fetch('/api/responses/' + encodeURIComponent(currentAuthorId));
+    if (!res.ok) return false;
+    const serverRecs = await res.json();
+    if (!Array.isArray(serverRecs) || !serverRecs.length) return false;
+    const localIds = new Set(responses.map(r => r.id));
+    let changed = false;
+    for (const r of serverRecs) {
+      if (!localIds.has(r.id)) { responses.push(r); changed = true; }
+    }
+    if (changed) saveResponses();
+    return changed;
+  } catch { return false; }
+}
+
+// Wrap renderAnalytics: pull from server before rendering
+const _baseRenderAnalyticsServer = renderAnalytics;
+renderAnalytics = async function() {
+  if (currentRole === 'author' && currentAuthorId) {
+    const el = document.getElementById('analytics-sync-status');
+    if (el) { el.textContent = '🔄 Syncing…'; el.style.color = 'var(--txt3)'; }
+    const got = await _pullServerResponses();
+    if (el) { el.textContent = got ? '✅ Synced' : ''; el.style.color = 'var(--green)'; }
+  }
+  _baseRenderAnalyticsServer();
+};
+window.renderAnalytics = renderAnalytics;
+
+// Auto-refresh dashboard every 30 s
+const _origGoScreenSync = goScreen;
+let   _dashPollInterval = null;
+goScreen = function(id) {
+  _origGoScreenSync(id);
+  clearInterval(_dashPollInterval); _dashPollInterval = null;
+  if (id === 's-analytics' && currentRole === 'author') {
+    _dashPollInterval = setInterval(async () => {
+      const got = await _pullServerResponses();
+      if (got) {
+        _baseRenderAnalyticsServer();
+        const el = document.getElementById('analytics-sync-status');
+        if (el) { el.textContent = '✅ New results!'; el.style.color = 'var(--green)'; }
+      }
+    }, 30000);
+  }
+};
+
+
+// ── Export modules for offline student use ──
+function exportForStudents(){
+  const myMods = modules.filter(m => !m.authorId || m.authorId===currentAuthorId);
+  if(!myMods.length){ toast('No modules to export'); return; }
+  const data = {
+    brainspark: true,
+    version: '1.1',
+    exportedAt: new Date().toISOString(),
+    authorId: currentAuthorId,
+    modules: myMods,
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'brainspark-modules.json';
+  a.click();
+  toast('✅ Exported ' + myMods.length + ' module' + (myMods.length!==1?'s':'') + ' for students!');
+}
+
+// ── Import results from the Analytics dashboard ──
+function importStudentResultsFromAnalytics(input){
+  importStudentResults(input);
+  // After import, always re-render analytics (already handled inside importStudentResults if screen is active,
+  // but force it here too in case the drop triggers before the screen flag updates)
+  setTimeout(() => {
+    if(document.getElementById('s-analytics').classList.contains('active')) renderAnalytics();
+  }, 100);
+}
+
+// Drag-and-drop on the analytics drop zone
+(function(){
+  function initAnalyticsDrop(){
+    const dz = document.getElementById('analytics-dropzone');
+    if(!dz) return;
+    dz.addEventListener('dragover', e=>{ e.preventDefault(); dz.style.borderColor='var(--acc)'; dz.style.background='rgba(123,110,246,.06)'; });
+    dz.addEventListener('dragleave', ()=>{ dz.style.borderColor=''; dz.style.background=''; });
+    dz.addEventListener('drop', e=>{
+      e.preventDefault(); dz.style.borderColor=''; dz.style.background='';
+      const file = e.dataTransfer.files[0];
+      if(!file){ toast('No file dropped'); return; }
+      if(!file.name.endsWith('.json')){ toast('Please drop a .json file'); return; }
+      // Reuse the existing import logic by creating a fake input
+      const fakeInput = { files:[file], value:'' };
+      importStudentResults(fakeInput);
+      setTimeout(()=>{ if(document.getElementById('s-analytics').classList.contains('active')) renderAnalytics(); }, 100);
+    });
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', initAnalyticsDrop);
+  else initAnalyticsDrop();
+})();
+
+// ── Import results JSON sent back by students ──
+function importStudentResults(input){
+  const file = input.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if(!data.brainspark || data.type!=='results' || !Array.isArray(data.results)){
+        toast('❌ Invalid file — not a BrainSpark results file'); return;
+      }
+      const localIds = new Set(responses.map(r=>r.id));
+      let added = 0;
+      for(const r of data.results){
+        if(!localIds.has(r.id)){ responses.push(r); added++; }
+      }
+      saveResponses();
+      input.value = '';
+      if(added>0){
+        toast('✅ Imported ' + added + ' result' + (added!==1?'s':'') + ' from ' + (data.studentName||'student') + '!', 3500);
+        // If analytics screen is open, re-render
+        if(document.getElementById('s-analytics').classList.contains('active')) renderAnalytics();
+      } else {
+        toast('No new results — already up to date');
+      }
+    } catch(e){ toast('❌ Could not read file: ' + e.message); }
+  };
+  reader.readAsText(file);
+}
+
+</script>
+
+<!-- STUDENT NAME REQUIRED MODAL -->
+<div class="overlay" id="m-student-name-required">
+  <div class="modal">
+    <div class="modal-head"><div class="modal-title">Enter your name</div></div>
+    <div class="field">
+      <input class="inp" id="student-name-required-inp" placeholder="Your name"/>
+    </div>
+    <button class="btn btn-p" onclick="submitRequiredStudentName()">Start</button>
+  </div>
+</div>
+
+<!-- CHART BUILDER MODAL -->
+<div class="overlay" id="m-chart-builder">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-head">
+      <div class="modal-title">📈 Insert Graph</div>
+      <button class="modal-x" onclick="closeModal('m-chart-builder')">×</button>
+    </div>
+    <!-- Chart type selector -->
+    <div class="field">
+      <label class="lbl">Chart Type</label>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:4px">
+        <div class="chart-type-btn selected" id="cbt-bar" onclick="selectChartType('bar')">📊<br/>Bar</div>
+        <div class="chart-type-btn" id="cbt-line" onclick="selectChartType('line')">📈<br/>Line</div>
+        <div class="chart-type-btn" id="cbt-pie" onclick="selectChartType('pie')">🥧<br/>Pie</div>
+        <div class="chart-type-btn" id="cbt-doughnut" onclick="selectChartType('doughnut')">🍩<br/>Doughnut</div>
+      </div>
+    </div>
+    <!-- Chart title -->
+    <div class="field">
+      <label class="lbl">Chart Title (optional)</label>
+      <input class="inp" id="cb-title" placeholder="e.g. Sales by Quarter" oninput="previewChart()"/>
+    </div>
+    <!-- Data rows -->
+    <div class="field">
+      <label class="lbl">Data <span style="color:var(--txt3);text-transform:none;letter-spacing:0;font-size:10.5px">(label + value)</span></label>
+      <div id="cb-data-rows"></div>
+      <button class="btn btn-g btn-sm" style="margin-top:8px" onclick="addChartDataRow()">+ Add Row</button>
+    </div>
+    <!-- Color -->
+    <div class="field">
+      <label class="lbl">Color Theme</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap" id="cb-colors">
+        <div onclick="selectChartColor('purple')" style="width:28px;height:28px;border-radius:50%;background:#7b6ef6;cursor:pointer;border:2px solid #fff" title="Purple"></div>
+        <div onclick="selectChartColor('green')" style="width:28px;height:28px;border-radius:50%;background:#3ecf8e;cursor:pointer;border:2px solid transparent" title="Green"></div>
+        <div onclick="selectChartColor('gold')" style="width:28px;height:28px;border-radius:50%;background:#f5c247;cursor:pointer;border:2px solid transparent" title="Gold"></div>
+        <div onclick="selectChartColor('red')" style="width:28px;height:28px;border-radius:50%;background:#f56565;cursor:pointer;border:2px solid transparent" title="Red"></div>
+        <div onclick="selectChartColor('blue')" style="width:28px;height:28px;border-radius:50%;background:#60a5fa;cursor:pointer;border:2px solid transparent" title="Blue"></div>
+        <div onclick="selectChartColor('multi')" style="width:28px;height:28px;border-radius:50%;background:conic-gradient(#7b6ef6 0%,#3ecf8e 25%,#f5c247 50%,#f56565 75%);cursor:pointer;border:2px solid transparent" title="Multi-color"></div>
+      </div>
+    </div>
+    <!-- Preview -->
+    <div class="field">
+      <label class="lbl">Preview</label>
+      <div style="background:var(--surf2);border:.5px solid var(--bdr);border-radius:var(--rs);padding:10px;min-height:160px;display:flex;align-items:center;justify-content:center">
+        <canvas id="cb-preview-canvas" height="150" style="max-height:150px"></canvas>
+      </div>
+    </div>
+    <div class="brow right">
+      <button class="btn btn-g" onclick="closeModal('m-chart-builder')">Cancel</button>
+      <button class="btn btn-p" onclick="insertChartIntoLesson()">Insert Graph</button>
+    </div>
+  </div>
+</div>
+
+
+<div style="position:fixed;bottom:12px;right:14px;font-size:10px;
+  font-family:monospace;color:rgba(255,255,255,0.18);
+  background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);
+  padding:3px 8px;border-radius:20px;pointer-events:none;z-index:9999;
+  user-select:none;letter-spacing:.5px">
+  v1.1
+</div>
+</body>
+</html>
