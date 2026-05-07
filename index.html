@@ -496,8 +496,24 @@ canvas{max-width:100%;}
 <!-- ════ ANALYTICS ════ -->
 <div class="screen" id="s-analytics">
   <button class="back" onclick="goScreen('s-home')">← Home</button>
-  <div class="h2" style="margin-bottom:.3rem">Analytics <em>Dashboard</em></div>
-  <p class="sub" style="margin-bottom:1.25rem">Response data from all student sessions.</p>
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:.5rem">
+    <div>
+      <div class="h2" style="margin-bottom:.3rem">Analytics <em>Dashboard</em></div>
+      <p class="sub" style="margin-bottom:0">Response data from all student sessions.</p>
+    </div>
+    <div>
+      <input type="file" id="analytics-results-file" accept=".json" style="display:none" onchange="importStudentResultsFromAnalytics(this)"/>
+      <button class="btn btn-p btn-sm" onclick="document.getElementById('analytics-results-file').click()" style="white-space:nowrap">
+        📂 Import Student Results
+      </button>
+    </div>
+  </div>
+
+  <!-- Drop zone for drag-and-drop on the analytics screen -->
+  <div id="analytics-dropzone" style="border:2px dashed rgba(123,110,246,.25);border-radius:var(--r);padding:14px 18px;text-align:center;font-size:13px;color:var(--txt3);margin-bottom:1.25rem;cursor:pointer;transition:border-color .2s,background .2s" onclick="document.getElementById('analytics-results-file').click()">
+    🎓 Drag &amp; drop a student results <code style="font-size:11px;background:var(--surf2);padding:1px 6px;border-radius:4px">brainspark-results-*.json</code> file here, or click to browse
+  </div>
+
   <div class="analytics-grid" id="analytics-summary"></div>
   <div class="chart-wrap">
     <div class="chart-title">Score Distribution (Quiz avg %)</div>
@@ -525,15 +541,6 @@ canvas{max-width:100%;}
   <button class="back" onclick="goScreen('s-home')">← Home</button>
   <div class="h2" style="margin-bottom:.3rem">Sync <em>&amp; Export</em></div>
   <p class="sub" style="margin-bottom:1.25rem">Offline-first — share modules manually across devices without internet.</p>
-
-  <div class="sync-box">
-    <h4>📤 Export Modules</h4>
-    <p>Download a .json file containing all your modules. Transfer it via USB, Bluetooth, email, or any method you prefer.</p>
-    <div class="sync-methods">
-      <button class="btn btn-p btn-sm" onclick="exportModules()">⬇ Export all modules</button>
-      <button class="btn btn-g btn-sm" onclick="exportModuleSelect()">⬇ Export one module</button>
-    </div>
-  </div>
 
   <div class="sync-box" style="border-color:rgba(123,110,246,.3)">
     <h4>🎓 Export for Students (Field Mode)</h4>
@@ -1469,7 +1476,8 @@ function drawTable(){
 }
 function clearAnalytics(){
   if(!confirm('Clear all response data?')) return;
-  responses=[]; saveResponses(); renderAnalytics(); toast('Analytics cleared');
+  responses=[]; saveResponses();
+  window.renderAnalytics(); toast('Analytics cleared');
 }
 
 /* ══════════════════════════════════════════════════════
@@ -2342,6 +2350,7 @@ renderAnalytics = async function() {
   }
   _baseRenderAnalyticsServer();
 };
+window.renderAnalytics = renderAnalytics;
 
 // Auto-refresh dashboard every 30 s
 const _origGoScreenSync = goScreen;
@@ -2380,6 +2389,38 @@ function exportForStudents(){
   a.click();
   toast('✅ Exported ' + myMods.length + ' module' + (myMods.length!==1?'s':'') + ' for students!');
 }
+
+// ── Import results from the Analytics dashboard ──
+function importStudentResultsFromAnalytics(input){
+  importStudentResults(input);
+  // After import, always re-render analytics (already handled inside importStudentResults if screen is active,
+  // but force it here too in case the drop triggers before the screen flag updates)
+  setTimeout(() => {
+    if(document.getElementById('s-analytics').classList.contains('active')) renderAnalytics();
+  }, 100);
+}
+
+// Drag-and-drop on the analytics drop zone
+(function(){
+  function initAnalyticsDrop(){
+    const dz = document.getElementById('analytics-dropzone');
+    if(!dz) return;
+    dz.addEventListener('dragover', e=>{ e.preventDefault(); dz.style.borderColor='var(--acc)'; dz.style.background='rgba(123,110,246,.06)'; });
+    dz.addEventListener('dragleave', ()=>{ dz.style.borderColor=''; dz.style.background=''; });
+    dz.addEventListener('drop', e=>{
+      e.preventDefault(); dz.style.borderColor=''; dz.style.background='';
+      const file = e.dataTransfer.files[0];
+      if(!file){ toast('No file dropped'); return; }
+      if(!file.name.endsWith('.json')){ toast('Please drop a .json file'); return; }
+      // Reuse the existing import logic by creating a fake input
+      const fakeInput = { files:[file], value:'' };
+      importStudentResults(fakeInput);
+      setTimeout(()=>{ if(document.getElementById('s-analytics').classList.contains('active')) renderAnalytics(); }, 100);
+    });
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', initAnalyticsDrop);
+  else initAnalyticsDrop();
+})();
 
 // ── Import results JSON sent back by students ──
 function importStudentResults(input){
