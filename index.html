@@ -727,6 +727,55 @@ function getAuthorByUsername(u){ return authors.find(a=>a.username.toLowerCase()
 function getAuthorById(id){ return authors.find(a=>a.id===id); }
 
 /* ══════════════════════════════════════════════════════
+   SERVER MODULE PERSISTENCE
+   Push every module save/import/delete to the server so
+   modules survive browser clears and work across devices.
+══════════════════════════════════════════════════════ */
+async function _pushModuleToServer(mod){
+  if(!mod||!mod.id||!mod.authorId) return;
+  try{
+    await fetch('/api/modules/'+encodeURIComponent(mod.id),{
+      method:'PUT',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(mod)
+    });
+  }catch(e){ console.warn('Module push failed (offline?):', e.message); }
+}
+
+async function _deleteModuleFromServer(moduleId, authorId){
+  if(!moduleId||!authorId) return;
+  try{
+    await fetch('/api/modules/'+encodeURIComponent(moduleId)+'?authorId='+encodeURIComponent(authorId),{
+      method:'DELETE'
+    });
+  }catch(e){ console.warn('Module delete failed (offline?):', e.message); }
+}
+
+async function _pullModulesFromServer(authorId){
+  if(!authorId) return false;
+  try{
+    const res=await fetch('/api/modules?authorId='+encodeURIComponent(authorId));
+    if(!res.ok) return false;
+    const serverMods=await res.json();
+    if(!Array.isArray(serverMods)||!serverMods.length) return false;
+    let changed=false;
+    for(const sm of serverMods){
+      const idx=modules.findIndex(m=>m.id===sm.id);
+      // Use whichever version is newer (server wins if same age or no local copy)
+      if(idx<0){
+        modules.push(sm); changed=true;
+      } else {
+        const localTs=modules[idx].updatedAt||modules[idx].publishedAt||'';
+        const serverTs=sm.updatedAt||sm.publishedAt||'';
+        if(serverTs>=localTs){ modules[idx]=sm; changed=true; }
+      }
+    }
+    if(changed) saveModules();
+    return changed;
+  }catch(e){ console.warn('Module pull failed (offline?):', e.message); return false; }
+}
+
+/* ══════════════════════════════════════════════════════
    SEED
 ══════════════════════════════════════════════════════ */
 function seedDefaultData(){
@@ -798,6 +847,10 @@ function doLogin(){
     currentRole='author'; currentAuthorId=author.id;
     document.getElementById('li-err').style.display='none';
     setupNav(); goScreen('s-home');
+    // Pull any server-saved modules for this author (runs in background)
+    _pullModulesFromServer(author.id).then(changed=>{
+      if(changed){ renderAuthorList(); toast('☁️ Modules synced from server',2200); }
+    });
   } else {
     document.getElementById('li-err').style.display='block';
   }
@@ -926,6 +979,7 @@ function deleteModule(id){
   const m=getMod(id);
   if(m&&m.authorId&&m.authorId!==currentAuthorId){toast('You can only delete your own modules');return;}
   if(!confirm('Delete this module?')) return;
+  if(m&&m.authorId) _deleteModuleFromServer(id, m.authorId);
   modules=modules.filter(x=>x.id!==id); saveModules(); renderAuthorList(); toast('Deleted');
 }
 
@@ -1110,10 +1164,11 @@ function saveModule(){
     const m=getMod(editingModuleId);
     if(m.authorId&&m.authorId!==currentAuthorId){toast('You can only edit your own modules');return;}
     m.title=title; m.desc=desc; m.pages=JSON.parse(JSON.stringify(edPages));
-    saveModules(); toast('Module updated!');
+    m.updatedAt=new Date().toISOString();
+    saveModules(); _pushModuleToServer(m); toast('Module updated!');
   } else {
-    const mod={id:uid(),type:'unified',title,desc,authorId:currentAuthorId,pages:JSON.parse(JSON.stringify(edPages))};
-    modules.push(mod); saveModules(); editingModuleId=mod.id; toast('Module saved!');
+    const mod={id:uid(),type:'unified',title,desc,authorId:currentAuthorId,pages:JSON.parse(JSON.stringify(edPages)),updatedAt:new Date().toISOString()};
+    modules.push(mod); saveModules(); editingModuleId=mod.id; _pushModuleToServer(mod); toast('Module saved!');
   }
   renderAuthorList(); goScreen('s-author');
 }
@@ -1364,7 +1419,7 @@ function recordResponse(type,score,total,finished){
   // Use stopwatch elapsed if available, else fall back to sessionStart
   const duration=window._lastQuizDuration!=null?window._lastQuizDuration:(sessionStart?Math.round((Date.now()-sessionStart)/1000):null);
   const studentName=window._forcedStudentName||null;
-  const rec={id:uid(),moduleId:currentModuleId,moduleTitle:m.title,moduleType:type,role:currentRole,score,total,pct,Finished:finished,duration,studentName,moduleAuthorId:m.authorId||null,timestamp:new Date().toISOString()};
+  const rec={id:uid(),moduleId:currentModuleId,moduleTitle:m.title,moduleType:type,role:currentRole,score,total,pct,Finished:finished,duration,studentName,timestamp:new Date().toISOString()};
   responses.push(rec); saveResponses();
   window._forcedStudentName=null;
   _pushResponseToServer(rec);
@@ -1518,14 +1573,18 @@ function doImportModules(){
   let count=0;
   _importPending.forEach((m,i)=>{
     if(!checkboxes[i]||!checkboxes[i].checked) return;
+    // Stamp the current author as owner if not already set
+    if(!m.authorId) m.authorId=currentAuthorId;
+    m.updatedAt=new Date().toISOString();
     // Check if module with same id already exists — update or add
     const existing=modules.findIndex(x=>x.id===m.id);
     if(existing>=0){ modules[existing]=m; }
     else { modules.push({...m}); }
+    _pushModuleToServer(m);
     count++;
   });
   saveModules(); closeModal('m-import-confirm');
-  toast(`Imported ${count} module(s)!`);
+  toast(`Imported ${count} module(s)! Saving to server…`);
   renderAuthorList();
 }
 
@@ -2421,7 +2480,7 @@ goScreen = function(id) {
 </div>
 
 <!-- VERSION BADGE -->
-<div id="version-badge" style="position:fixed;bottom:10px;right:12px;z-index:9990;font-size:10.5px;font-family:var(--fb);color:var(--txt3);background:rgba(17,17,28,0.7);border:.5px solid var(--bdr);border-radius:20px;padding:3px 9px;pointer-events:none;backdrop-filter:blur(8px);letter-spacing:.3px;">v1.1.0</div>
+<div id="version-badge" style="position:fixed;bottom:10px;right:12px;z-index:9990;font-size:10.5px;font-family:var(--fb);color:var(--txt3);background:rgba(17,17,28,0.7);border:.5px solid var(--bdr);border-radius:20px;padding:3px 9px;pointer-events:none;backdrop-filter:blur(8px);letter-spacing:.3px;">v1.2.0</div>
 
 </body>
 </html>
