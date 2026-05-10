@@ -627,6 +627,8 @@ canvas{max-width:100%;}
         <button class="rtb-btn" onclick="rtbCmd('bold')" title="Bold"><strong>B</strong></button>
         <button class="rtb-btn" onclick="rtbCmd('italic')" title="Italic"><em>I</em></button>
         <button class="rtb-btn" onclick="rtbCmd('underline')" title="Underline"><u>U</u></button>
+        <button class="rtb-btn" onclick="rtbSuperscript()" title="Superscript (e.g. x²)">x<sup style="font-size:8px">2</sup></button>
+        <button class="rtb-btn" onclick="rtbSubscript()" title="Subscript (e.g. H₂O)">x<sub style="font-size:8px">2</sub></button>
         <div class="rtb-sep"></div>
         <button class="rtb-btn" onclick="rtbCmd('justifyLeft')" title="Left">⬅</button>
         <button class="rtb-btn" onclick="rtbCmd('justifyCenter')" title="Center">☰</button>
@@ -1237,6 +1239,43 @@ function rtbInsertBtn(){
   document.getElementById('ml-content').focus();
   document.execCommand('insertHTML',false,`<a href="${esc(url)}" target="_blank" rel="noopener" class="activity-btn" style="display:inline-flex;align-items:center;gap:8px;background:rgba(123,110,246,.15);color:#a095ff;border:.5px solid rgba(123,110,246,.3);border-radius:8px;padding:10px 16px;font-size:13.5px;font-weight:500;text-decoration:none;margin:4px 0">🔗 ${esc(label)}</a>`);
 }
+function rtbSuperscript(){
+  const ed=document.getElementById('ml-content'); ed.focus();
+  const sel=window.getSelection();
+  // If text is selected, wrap it; otherwise toggle superscript mode
+  if(sel&&sel.toString().length>0){
+    // Check if already inside a <sup> — if so, unwrap
+    const anc=sel.anchorNode;
+    const parentSup=anc&&(anc.nodeName==='SUP'||anc.parentElement?.nodeName==='SUP');
+    if(parentSup){
+      document.execCommand('insertHTML',false,sel.toString());
+    } else {
+      // Remove any active subscript first, then apply superscript
+      document.execCommand('subscript',false,null);
+      document.execCommand('superscript',false,null);
+    }
+  } else {
+    document.execCommand('subscript',false,null); // turn off sub if on
+    document.execCommand('superscript',false,null);
+  }
+}
+function rtbSubscript(){
+  const ed=document.getElementById('ml-content'); ed.focus();
+  const sel=window.getSelection();
+  if(sel&&sel.toString().length>0){
+    const anc=sel.anchorNode;
+    const parentSub=anc&&(anc.nodeName==='SUB'||anc.parentElement?.nodeName==='SUB');
+    if(parentSub){
+      document.execCommand('insertHTML',false,sel.toString());
+    } else {
+      document.execCommand('superscript',false,null); // turn off sup if on
+      document.execCommand('subscript',false,null);
+    }
+  } else {
+    document.execCommand('superscript',false,null); // turn off sup if on
+    document.execCommand('subscript',false,null);
+  }
+}
 
 /* ══════════════════════════════════════════════════════
    MODULE PLAYER — unified interactive flow
@@ -1292,7 +1331,14 @@ function renderQuestionPage(p,idx,container){
   const div=document.createElement('div'); div.className='mp-page mp-question';
   const alreadyAnswered=mpQAnswered[idx];
   const L=['A','B','C','D','E','F'];
+  const qInstructions={
+    mcq:       '🔘 Select the letter of the correct answer.',
+    fitb:      '✏️ Type your answer in the box and press Submit.',
+    truefalse: '☑️ Select whether the statement is True or False.',
+  };
+  const instrText=qInstructions[p.qtype]||'Answer the question below.';
   let qHtml=`<div class="mp-page-label">❓ Question</div>`;
+  qHtml+=`<div style="display:inline-flex;align-items:center;gap:6px;background:rgba(123,110,246,.1);border:.5px solid rgba(123,110,246,.25);border-radius:6px;padding:5px 12px;font-size:12px;color:var(--acc-lt);margin-bottom:.9rem;font-weight:500;">${instrText}</div>`;
   qHtml+=`<div class="mp-q-text">${esc(p.qtext||'')}</div>`;
   if(p.qimg) qHtml+=`<img class="mp-q-img" src="${esc(p.qimg)}" alt=""/>`;
   div.innerHTML=qHtml;
